@@ -26,11 +26,22 @@ jobs:
           node-version: 22
       - name: Configure W.I.L Master
         run: |
-          sed -i "s/alissoncrpay@gmail.com/admin@wilpay.com.br/g" src/App.jsx
-          sed -i "s/alissoncrpay@gmail.com/admin@wilpay.com.br/g" src/AppV2.jsx
-          sed -i "s/if(mode==='register'){if(admin)throw new Error('Este e-mail é reservado ao administrador.');/if(mode==='register'){/" src/AppV2.jsx
-          sed -i 's/{!admin&&<div className="authtabs">/{<div className="authtabs">/' src/AppV2.jsx
-          sed -i "s/{mode==='register'&&!admin&&<label>/{mode==='register'&&<label>/" src/AppV2.jsx
+          python - <<'PY'
+          from pathlib import Path
+          for name in ['src/App.jsx','src/AppV2.jsx']:
+              p=Path(name)
+              s=p.read_text()
+              s=s.replace("const ADMIN_EMAIL='alissoncrpay@gmail.com';", "const ADMIN_EMAIL='admin@wilpay.com.br';")
+              p.write_text(s)
+
+          p=Path('src/AppV2.jsx')
+          s=p.read_text()
+          old="else{const r=await neon.auth.signIn.email({email:form.email,password:form.password,rememberMe:true});if(r.error)throw new Error(r.error.message)}await onReady()"
+          new="else{let r=await neon.auth.signIn.email({email:form.email,password:form.password,rememberMe:true});if(r.error&&admin){const first=await neon.auth.signUp.email({name:'Administrador W.I.L Pay',email:form.email,password:form.password});if(!first.error)r=await neon.auth.signIn.email({email:form.email,password:form.password,rememberMe:true})}if(r.error)throw new Error(r.error.message)}await onReady()"
+          if old not in s:
+              raise SystemExit('Trecho de autenticação não encontrado')
+          p.write_text(s.replace(old,new))
+          PY
       - name: Install
         run: npm install
       - name: Build
