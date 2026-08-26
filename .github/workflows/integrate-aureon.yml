@@ -1,0 +1,48 @@
+name: Integrate Aureon Base
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: "!contains(github.event.head_commit.message, '[aureon-integrated]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Migrate source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/AppV2.jsx')
+          s=p.read_text()
+          s=s.replace("import{neon}from'./lib/neonClient';", "import{neon}from'./lib/aureonClient';")
+          s=s.replace("const ADMIN_EMAIL='alissoncrpay@gmail.com';", "const ADMIN_EMAIL='admin@wilpay.com.br';")
+          s=s.replace('Autenticação pelo Neon Auth.', 'Autenticação pela Aureon Base.')
+          s=s.replace('minLength="8" value={form.password}', 'minLength="10" value={form.password}')
+          p.write_text(s)
+          PY
+      - name: Validate build
+        run: |
+          npm install
+          npm run build
+      - name: Commit migration
+        run: |
+          if git diff --quiet; then
+            echo "Already integrated"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/AppV2.jsx
+          git commit -m "feat: move W.I.L Pay auth and data to Aureon Base [aureon-integrated]"
+          git push
