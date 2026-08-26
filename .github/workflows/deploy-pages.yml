@@ -39,13 +39,19 @@ jobs:
           s=s.replace(old,new)
 
           old_session="async function session(){try{const s=await neon.auth.getSession();setUser(s.data?.user||null)}finally{setLoading(false)}}"
-          new_session="async function session(){try{const sess=await neon.auth.getSession();const u=sess.data?.user||null;if(u&&!localStorage.getItem('wilpay_session')){await neon.auth.signOut();setUser(null)}else setUser(u)}finally{setLoading(false)}}"
+          new_session="async function session(){try{const boot='wilpay_boot_v14';if(localStorage.getItem(boot)!=='1'){localStorage.removeItem('wilpay_session');try{await neon.auth.signOut()}catch{}localStorage.setItem(boot,'1');setUser(null);return}const sess=await neon.auth.getSession();const u=sess.data?.user||null;if(u&&!localStorage.getItem('wilpay_session')){try{await neon.auth.signOut()}catch{}setUser(null)}else setUser(u)}finally{setLoading(false)}}"
           if old_session not in s:
               raise SystemExit('Trecho de sessão não encontrado')
           s=s.replace(old_session,new_session)
 
           s=s.replace("async function signOut(){await neon.auth.signOut();location.reload()}", "async function signOut(){localStorage.removeItem('wilpay_session');await neon.auth.signOut();location.reload()}")
           p.write_text(s)
+
+          sw=Path('public/sw.js')
+          if sw.exists():
+              txt=sw.read_text()
+              txt=txt.replace("CACHE='wil-pay-v1'", "CACHE='wil-pay-v14'")
+              sw.write_text(txt)
           PY
       - name: Install
         run: npm install
