@@ -37,7 +37,7 @@ jobs:
           p=Path('src/AppV2.jsx')
           s=p.read_text()
           old="else{const r=await neon.auth.signIn.email({email:form.email,password:form.password,rememberMe:true});if(r.error)throw new Error(r.error.message)}await onReady()"
-          new="else{let r=await neon.auth.signIn.email({email:form.email,password:form.password,rememberMe:true});if(r.error&&admin){const first=await neon.auth.signUp.email({name:'Administrador W.I.L Pay',email:form.email,password:form.password});if(!first.error)r=await neon.auth.signIn.email({email:form.email,password:form.password,rememberMe:true})}if(r.error)throw new Error(r.error.message)}await onReady()"
+          new="else{let r;if(admin){const first=await neon.auth.signUp.email({name:'Administrador W.I.L Pay',email:form.email.trim().toLowerCase(),password:form.password});if(first.error){r=await neon.auth.signIn.email({email:form.email.trim().toLowerCase(),password:form.password,rememberMe:true});if(r.error)throw new Error('Ativação do administrador falhou: '+first.error.message+' | Login: '+r.error.message)}else{r=first}}else{r=await neon.auth.signIn.email({email:form.email.trim().toLowerCase(),password:form.password,rememberMe:true});if(r.error)throw new Error(r.error.message)}}await onReady()"
           if old not in s:
               raise SystemExit('Trecho de autenticação não encontrado')
           p.write_text(s.replace(old,new))
