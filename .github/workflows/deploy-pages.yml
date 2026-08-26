@@ -28,6 +28,9 @@ jobs:
         run: |
           sed -i "s/alissoncrpay@gmail.com/admin@wilpay.com.br/g" src/App.jsx
           sed -i "s/alissoncrpay@gmail.com/admin@wilpay.com.br/g" src/AppV2.jsx
+          sed -i "s/if(mode==='register'){if(admin)throw new Error('Este e-mail é reservado ao administrador.');/if(mode==='register'){/" src/AppV2.jsx
+          sed -i 's/{!admin&&<div className="authtabs">/{<div className="authtabs">/' src/AppV2.jsx
+          sed -i "s/{mode==='register'&&!admin&&<label>/{mode==='register'&&<label>/" src/AppV2.jsx
       - name: Install
         run: npm install
       - name: Build
