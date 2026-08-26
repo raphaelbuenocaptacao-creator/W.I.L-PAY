@@ -24,6 +24,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Configure W.I.L Master
+        run: sed -i "s/alissoncrpay@gmail.com/admin@wilpay.com.br/g" src/App.jsx
       - name: Install
         run: npm install
       - name: Build
