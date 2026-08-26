@@ -28,19 +28,18 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          for name in ['src/App.jsx','src/AppV2.jsx']:
-              p=Path(name)
-              s=p.read_text()
-              s=s.replace("const ADMIN_EMAIL='alissoncrpay@gmail.com';", "const ADMIN_EMAIL='admin@wilpay.com.br';")
-              p.write_text(s)
 
           p=Path('src/AppV2.jsx')
           s=p.read_text()
+          s=s.replace("const ADMIN_EMAIL='alissoncrpay@gmail.com';", "const ADMIN_EMAIL='admin@wilpay.com.br';\nconst ADMIN_AUTH_EMAIL='raphaelbueno.captacao+wilpay@gmail.com';")
+
           old="else{const r=await neon.auth.signIn.email({email:form.email,password:form.password,rememberMe:true});if(r.error)throw new Error(r.error.message)}await onReady()"
-          new="else{let r;if(admin){const first=await neon.auth.signUp.email({name:'Administrador W.I.L Pay',email:form.email.trim().toLowerCase(),password:form.password});if(first.error){r=await neon.auth.signIn.email({email:form.email.trim().toLowerCase(),password:form.password,rememberMe:true});if(r.error)throw new Error('Ativação do administrador falhou: '+first.error.message+' | Login: '+r.error.message)}else{r=first}}else{r=await neon.auth.signIn.email({email:form.email.trim().toLowerCase(),password:form.password,rememberMe:true});if(r.error)throw new Error(r.error.message)}}await onReady()"
+          new="else{const authEmail=admin?ADMIN_AUTH_EMAIL:form.email.trim().toLowerCase();let r=await neon.auth.signIn.email({email:authEmail,password:form.password,rememberMe:true});if(r.error&&admin){const first=await neon.auth.signUp.email({name:'Administrador W.I.L Pay',email:ADMIN_AUTH_EMAIL,password:form.password});if(first.error){r=await neon.auth.signIn.email({email:ADMIN_AUTH_EMAIL,password:form.password,rememberMe:true});if(r.error)throw new Error(r.error.message)}else{r=await neon.auth.signIn.email({email:ADMIN_AUTH_EMAIL,password:form.password,rememberMe:true});if(r.error)throw new Error(r.error.message)}}else if(r.error)throw new Error(r.error.message)}await onReady()"
           if old not in s:
               raise SystemExit('Trecho de autenticação não encontrado')
-          p.write_text(s.replace(old,new))
+          s=s.replace(old,new)
+          s=s.replace("return user.email?.toLowerCase()===ADMIN_EMAIL?<AdminApp authUser={user}/>:<ClientApp authUser={user}/>", "return [ADMIN_EMAIL,ADMIN_AUTH_EMAIL].includes(user.email?.toLowerCase())?<AdminApp authUser={user}/>:<ClientApp authUser={user}/>")
+          p.write_text(s)
           PY
       - name: Install
         run: npm install
