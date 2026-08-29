@@ -1,1 +1,52 @@
-const CACHE='wil-pay-aureon-v20',OFFLINE='./index.html';self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.add(OFFLINE)));self.skipWaiting()});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))));self.clients.claim()});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(u.origin!==self.location.origin)return;e.respondWith(fetch(e.request,{cache:'no-store'}).catch(async()=>await caches.match(e.request)||caches.match(OFFLINE)))})
+const CACHE = 'wil-pay-shell-v21';
+const OFFLINE = './index.html';
+const APP_SHELL = [
+  OFFLINE,
+  './manifest.webmanifest',
+  './icons/icon-192.svg',
+  './icons/icon-512.svg',
+  './icons/icon-512-maskable.svg'
+];
+const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|token|account|profile|user|me)(\/|$)/i;
+const PRIVATE_QUERY = /(token|access_token|refresh_token|password|secret|session|auth)=/i;
+
+function isPrivate(request) {
+  const url = new URL(request.url);
+  return request.headers.has('authorization') ||
+    request.headers.has('cookie') ||
+    PRIVATE_PATH.test(url.pathname) ||
+    PRIVATE_QUERY.test(url.search);
+}
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (isPrivate(request)) return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => caches.match(OFFLINE)));
+    return;
+  }
+
+  const relativePath = `.${url.pathname.replace('/W.I.L-PAY', '')}`;
+  if (!APP_SHELL.includes(relativePath)) return;
+  event.respondWith(caches.match(request).then(hit => hit || fetch(request)));
+});
