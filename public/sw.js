@@ -1,4 +1,4 @@
-const CACHE = 'wil-pay-shell-v22-safe';
+const CACHE = 'wil-pay-shell-v23-safe';
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -13,6 +13,7 @@ const PRIVATE_KEYS = new Set([
   'access_token',
   'refresh_token',
   'password',
+  'passwd',
   'secret',
   'session',
   'auth',
