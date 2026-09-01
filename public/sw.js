@@ -1,4 +1,4 @@
-const CACHE = 'wil-pay-shell-v23-safe';
+const CACHE = 'wil-pay-shell-v24-safe';
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -39,11 +39,34 @@ function isPrivate(request, url) {
     hasSensitiveQuery(url);
 }
 
+function isCacheableResponse(response) {
+  if (!response || !response.ok || response.type === 'opaque') return false;
+  const cacheControl = (response.headers.get('cache-control') || '').toLowerCase();
+  if (cacheControl.includes('private') || cacheControl.includes('no-store')) return false;
+  if (response.headers.has('set-cookie')) return false;
+  return true;
+}
+
+async function precacheShell() {
+  const cache = await caches.open(CACHE);
+  await Promise.all(APP_SHELL.map(async asset => {
+    try {
+      const response = await fetch(asset, {
+        cache: 'no-store',
+        credentials: 'omit'
+      });
+      if (isCacheableResponse(response)) {
+        await cache.put(asset, response.clone());
+      }
+    } catch (error) {
+      console.warn('W.I.L Pay precache skipped:', asset, error);
+    }
+  }));
+}
+
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+    precacheShell().then(() => self.skipWaiting())
   );
 });
 
@@ -65,7 +88,7 @@ self.addEventListener('fetch', event => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request, { cache: 'no-store' })
+      fetch(request, { cache: 'no-store', credentials: 'same-origin' })
         .catch(() => caches.match(OFFLINE))
     );
     return;
@@ -79,6 +102,13 @@ self.addEventListener('fetch', event => {
   if (!APP_SHELL.includes(relativePath)) return;
 
   event.respondWith(
-    caches.match(request).then(hit => hit || fetch(request, { cache: 'no-store' }))
+    caches.match(request).then(async hit => {
+      if (hit) return hit;
+      const response = await fetch(request, { cache: 'no-store', credentials: 'omit' });
+      if (!isCacheableResponse(response)) return response;
+      const cache = await caches.open(CACHE);
+      await cache.put(request, response.clone());
+      return response;
+    })
   );
 });
