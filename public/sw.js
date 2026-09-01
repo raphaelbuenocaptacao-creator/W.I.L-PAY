@@ -1,4 +1,5 @@
-const CACHE = 'wil-pay-shell-v24-safe';
+const CACHE_PREFIX = 'wil-pay-shell-';
+const CACHE = `${CACHE_PREFIX}v25-safe`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -73,7 +74,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
