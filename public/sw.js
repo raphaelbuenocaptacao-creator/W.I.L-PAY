@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v25-safe`;
+const CACHE = `${CACHE_PREFIX}v26-safe`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -41,7 +41,7 @@ function isPrivate(request, url) {
 }
 
 function isCacheableResponse(response) {
-  if (!response || !response.ok || response.type === 'opaque') return false;
+  if (!response || !response.ok || response.status === 206 || response.type === 'opaque') return false;
   const cacheControl = (response.headers.get('cache-control') || '').toLowerCase();
   if (cacheControl.includes('private') || cacheControl.includes('no-store')) return false;
   if (response.headers.has('set-cookie')) return false;
