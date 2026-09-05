@@ -177,8 +177,11 @@ class Builder {
         const inputs = Array.isArray(this.payload) ? this.payload : [this.payload];
         const saved = [];
         for (const item of inputs) {
-          const body = { data: clean(item) };
-          if (item?.auth_uid) body.owner_user_id = item.auth_uid;
+          const normalized = this.collection === 'loans' && Number(item?.principal || 0) > 1000
+            ? { ...item, collateral_required: true }
+            : item;
+          const body = { data: clean(normalized) };
+          if (normalized?.auth_uid) body.owner_user_id = normalized.auth_uid;
           const record = await request(
             `/v1/projects/${PROJECT}/data/${encodeURIComponent(this.collection)}`,
             { method: 'POST', body: JSON.stringify(body) },
@@ -193,6 +196,10 @@ class Builder {
         const saved = [];
         for (const row of existing) {
           const merged = clean({ ...row, ...this.payload });
+          const securedCredit = this.collection === 'loans' && (merged.collateral_required || Number(merged.principal || 0) > 1000);
+          if (securedCredit && merged.status === 'ATIVO' && !merged.collateral_received_at) {
+            throw new Error('Garantia física ainda não foi confirmada como recebida pelo administrador.');
+          }
           const record = await request(
             `/v1/projects/${PROJECT}/data/${encodeURIComponent(this.collection)}/${encodeURIComponent(row._record_id)}`,
             { method: 'PUT', body: JSON.stringify({ data: merged }) },
