@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v31-wallet-docs-location`;
+const CACHE = `${CACHE_PREFIX}v32-force-refresh`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -52,11 +52,19 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key)));
+    await self.clients.claim();
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    await Promise.all(clients.map(async client => {
+      try {
+        await client.navigate(client.url);
+      } catch {
+        try { client.postMessage({ type: 'WILPAY_UPDATE_READY', version: 'v32-force-refresh' }); } catch {}
+      }
+    }));
+  })());
 });
 
 self.addEventListener('fetch', event => {
