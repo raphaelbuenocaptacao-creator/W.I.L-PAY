@@ -1,30 +1,15 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v27-safe`;
+const CACHE = `${CACHE_PREFIX}v28-raster-safe`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
   './manifest.webmanifest',
-  './icons/icon-192.svg',
-  './icons/icon-512.svg',
-  './icons/icon-512-maskable.svg'
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-512-maskable.png'
 ];
 const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|token|account|profile|user|me)(\/|$)/i;
-const PRIVATE_KEYS = new Set([
-  'token',
-  'access_token',
-  'refresh_token',
-  'password',
-  'passwd',
-  'secret',
-  'session',
-  'auth',
-  'authorization',
-  'api_key',
-  'apikey',
-  'code',
-  'credential',
-  'credentials'
-]);
+const PRIVATE_KEYS = new Set(['token','access_token','refresh_token','password','passwd','secret','session','auth','authorization','api_key','apikey','code','credential','credentials']);
 
 function hasSensitiveQuery(url) {
   for (const key of url.searchParams.keys()) {
@@ -37,6 +22,7 @@ function isPrivate(request, url) {
   return request.headers.has('authorization') ||
     request.headers.has('cookie') ||
     request.headers.has('range') ||
+    request.headers.has('if-range') ||
     PRIVATE_PATH.test(url.pathname) ||
     hasSensitiveQuery(url);
 }
@@ -53,13 +39,8 @@ async function precacheShell() {
   const cache = await caches.open(CACHE);
   await Promise.all(APP_SHELL.map(async asset => {
     try {
-      const response = await fetch(asset, {
-        cache: 'no-store',
-        credentials: 'omit'
-      });
-      if (isCacheableResponse(response)) {
-        await cache.put(asset, response.clone());
-      }
+      const response = await fetch(asset, { cache: 'no-store', credentials: 'omit', redirect: 'error' });
+      if (isCacheableResponse(response)) await cache.put(asset, response.clone());
     } catch (error) {
       console.warn('W.I.L Pay precache skipped:', asset, error);
     }
@@ -67,9 +48,7 @@ async function precacheShell() {
 }
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    precacheShell().then(() => self.skipWaiting())
-  );
+  event.waitUntil(precacheShell().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
@@ -89,24 +68,18 @@ self.addEventListener('fetch', event => {
   if (isPrivate(request, url)) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request, { cache: 'no-store', credentials: 'same-origin' })
-        .catch(() => caches.match(OFFLINE))
-    );
+    event.respondWith(fetch(request, { cache: 'no-store', credentials: 'same-origin', redirect: 'error' }).catch(() => caches.match(OFFLINE)));
     return;
   }
 
-  // Cache only immutable app-shell URLs without query strings. This prevents
-  // accidental caching of signed URLs, cache-busting tokens, or private data.
   if (url.search) return;
-
   const relativePath = `.${url.pathname.replace('/W.I.L-PAY', '')}`;
   if (!APP_SHELL.includes(relativePath)) return;
 
   event.respondWith(
     caches.match(request).then(async hit => {
       if (hit) return hit;
-      const response = await fetch(request, { cache: 'no-store', credentials: 'omit' });
+      const response = await fetch(request, { cache: 'no-store', credentials: 'omit', redirect: 'error' });
       if (!isCacheableResponse(response)) return response;
       const cache = await caches.open(CACHE);
       await cache.put(request, response.clone());

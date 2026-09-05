@@ -12,7 +12,7 @@ const isSecureContextForPwa = location.protocol === 'https:' || ['localhost', '1
 if ('serviceWorker' in navigator && isSecureContextForPwa) {
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
+      const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=28-raster-safe`, {
         scope: import.meta.env.BASE_URL,
         updateViaCache: 'none'
       });
