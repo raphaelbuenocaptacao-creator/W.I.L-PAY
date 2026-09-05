@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v32-force-refresh`;
+const CACHE = `${CACHE_PREFIX}v33-document-viewer`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -61,7 +61,7 @@ self.addEventListener('activate', event => {
       try {
         await client.navigate(client.url);
       } catch {
-        try { client.postMessage({ type: 'WILPAY_UPDATE_READY', version: 'v32-force-refresh' }); } catch {}
+        try { client.postMessage({ type: 'WILPAY_UPDATE_READY', version: 'v33-document-viewer' }); } catch {}
       }
     }));
   })());
