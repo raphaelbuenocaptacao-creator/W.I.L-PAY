@@ -8,6 +8,12 @@ const wilPayEnhancements={
     if(id.includes('/src/App.jsx')||id.includes('\\src\\App.jsx')){
       return code.replace(/const ADMIN_EMAIL='[^']+';/,"const ADMIN_EMAIL='admin@wilpay.com.br';");
     }
+    if(id.includes('/src/AppV3.jsx')||id.includes('\\src\\AppV3.jsx')){
+      return code.replace(
+        '<i><em style={{width:`${progress}%`}}/></div><section className="panel wallet-table-wrap">',
+        '<i><em style={{width:`${progress}%`}}/></i></div><section className="panel wallet-table-wrap">'
+      );
+    }
     if(!(id.includes('/src/AppV2.jsx')||id.includes('\\src\\AppV2.jsx')))return null;
     let out=code;
 
