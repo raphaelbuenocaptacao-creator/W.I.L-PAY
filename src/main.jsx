@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './AppV2';
 import './styles.css';
 import './v2.css';
+import './enhancements.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>
@@ -12,7 +13,7 @@ const isSecureContextForPwa = location.protocol === 'https:' || ['localhost', '1
 if ('serviceWorker' in navigator && isSecureContextForPwa) {
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=29-credit-flow`, {
+      const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=30-guarantee-flow`, {
         scope: import.meta.env.BASE_URL,
         updateViaCache: 'none'
       });
