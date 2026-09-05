@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v28-raster-safe`;
+const CACHE = `${CACHE_PREFIX}v29-credit-flow`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
