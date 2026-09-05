@@ -1,0 +1,15 @@
+.wil-viewer-open{overflow:hidden}
+.wil-document-viewer{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:18px}
+.wil-document-viewer__shell{width:min(1100px,96vw);height:min(860px,94vh);background:#0d0d0a;border:1px solid rgba(230,190,79,.35);border-radius:22px;display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;box-shadow:0 30px 100px rgba(0,0,0,.6)}
+.wil-document-viewer__header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid rgba(230,190,79,.18);background:#11110d}
+.wil-document-viewer__title{display:grid;gap:4px;min-width:0}
+.wil-document-viewer__title small{font-size:11px;letter-spacing:.12em;color:#d8b84f;font-weight:800}
+.wil-document-viewer__title b{font-size:18px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wil-document-viewer__close{border:1px solid rgba(230,190,79,.45);background:#17150d;color:#f8d86d;border-radius:999px;padding:10px 16px;font-weight:800;cursor:pointer}
+.wil-document-viewer__body{min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;padding:18px;background:#050505}
+.wil-document-viewer__image{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:14px;box-shadow:0 12px 38px rgba(0,0,0,.4)}
+.wil-document-viewer__pdf{width:100%;height:100%;min-height:600px;border:0;background:#fff;border-radius:12px}
+.wil-document-viewer__unsupported{color:#ddd;text-align:center;padding:40px}
+.wil-document-viewer__footer{display:flex;justify-content:flex-end;padding:14px 20px;border-top:1px solid rgba(230,190,79,.18);background:#11110d}
+.wil-document-viewer__download{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:linear-gradient(135deg,#f2d36c,#c99424);color:#111;padding:11px 18px;border-radius:12px;font-weight:900}
+@media(max-width:640px){.wil-document-viewer{padding:0}.wil-document-viewer__shell{width:100vw;height:100dvh;border-radius:0;border-left:0;border-right:0}.wil-document-viewer__header{padding:14px}.wil-document-viewer__title b{font-size:16px}.wil-document-viewer__body{padding:10px}.wil-document-viewer__pdf{min-height:0}.wil-document-viewer__footer{padding:12px 14px}.wil-document-viewer__download{width:100%}}
