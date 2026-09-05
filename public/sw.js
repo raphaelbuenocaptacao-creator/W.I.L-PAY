@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v30-guarantee-flow`;
+const CACHE = `${CACHE_PREFIX}v31-wallet-docs-location`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
