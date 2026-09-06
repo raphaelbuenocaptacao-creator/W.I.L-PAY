@@ -11,10 +11,10 @@ BEGIN
   ) THEN
     ALTER TABLE wilpay.private_files
       ADD CONSTRAINT wilpay_private_files_extension_matches_content_type CHECK (
-        (content_type = 'application/pdf' AND lower(object_key) ~ '\\.pdf$')
-        OR (content_type = 'image/jpeg' AND lower(object_key) ~ '\\.(jpg|jpeg)$')
-        OR (content_type = 'image/png' AND lower(object_key) ~ '\\.png$')
-        OR (content_type = 'image/webp' AND lower(object_key) ~ '\\.webp$')
+        (content_type = 'application/pdf' AND lower(object_key) ~ '[.]pdf$')
+        OR (content_type = 'image/jpeg' AND lower(object_key) ~ '[.](jpg|jpeg)$')
+        OR (content_type = 'image/png' AND lower(object_key) ~ '[.]png$')
+        OR (content_type = 'image/webp' AND lower(object_key) ~ '[.]webp$')
       ) NOT VALID;
   END IF;
 END;
