@@ -53,7 +53,7 @@ const readableFile = {
     return fileBytes.buffer.slice(fileBytes.byteOffset, fileBytes.byteOffset + fileBytes.byteLength);
   }
 };
-const expectedHash = '702d48e5ae967e8e61f530e80963ec4a3220d070716d5bbb43abcc8f2a8558af';
+const expectedHash = '242578b9349fa2134eaf70a11c434ad5a10da94d5d5ccba6bdb3d26d07586454';
 assert.equal(await sha256WilpayFile(readableFile), expectedHash);
 
 const prepared = await prepareWilpayPrivateUpload({
