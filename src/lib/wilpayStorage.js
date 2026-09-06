@@ -26,8 +26,11 @@ function extensionForMime(mimeType) {
   })[mimeType];
 }
 
-function normalizeChecksum(checksumSha256) {
-  if (checksumSha256 == null || checksumSha256 === '') return null;
+function normalizeChecksum(checksumSha256, { required = false } = {}) {
+  if (checksumSha256 == null || checksumSha256 === '') {
+    if (required) throw new Error('checksumSha256 is required for new private uploads');
+    return null;
+  }
   const normalized = String(checksumSha256).trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(normalized)) throw new Error('Invalid checksumSha256');
   return normalized;
@@ -52,7 +55,7 @@ export function buildWilpayObjectKey({ userId, loanId, kind, fileId, mimeType })
   return `wilpay/users/${safeUserId}/loans/${safeLoanId}/${safeKind}/${safeFileId}.${extensionForMime(mimeType)}`;
 }
 
-export function buildWilpayFileMetadata({ userId, loanId, kind, fileId, file, checksumSha256 = null }) {
+export function buildWilpayFileMetadata({ userId, loanId, kind, fileId, file, checksumSha256 }) {
   const { size, mimeType } = validateWilpayUpload(file);
   const objectKey = buildWilpayObjectKey({ userId, loanId, kind, fileId, mimeType });
   return {
@@ -63,7 +66,7 @@ export function buildWilpayFileMetadata({ userId, loanId, kind, fileId, file, ch
     object_key: objectKey,
     mime_type: mimeType,
     size_bytes: size,
-    checksum_sha256: normalizeChecksum(checksumSha256),
+    checksum_sha256: normalizeChecksum(checksumSha256, { required: true }),
     storage_scope: STORAGE_SCOPE,
     visibility: 'private'
   };
@@ -84,7 +87,7 @@ export function assertWilpayFileMetadata(metadata) {
   if (metadata.object_key !== expectedKey) throw new Error('Metadata object_key does not match owner/loan scope');
   const size = Number(metadata.size_bytes);
   if (!Number.isFinite(size) || size <= 0 || size > DEFAULT_MAX_BYTES) throw new Error('Metadata size is not allowed');
-  normalizeChecksum(metadata.checksum_sha256);
+  normalizeChecksum(metadata.checksum_sha256, { required: true });
   return true;
 }
 
