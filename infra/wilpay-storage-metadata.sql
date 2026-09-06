@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS wilpay.private_files (
       length('wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/')
     ) = 'wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/'
     AND length(object_key) > length('wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/')
+  ),
+  CONSTRAINT wilpay_private_files_metadata_safe CHECK (
+    jsonb_typeof(metadata) = 'object'
+    AND octet_length(metadata::text) <= 16384
+    AND NOT (metadata ?| ARRAY[
+      'data_url','signed_url','service_role','token','authorization',
+      'file_bytes','base64','secret','password','api_key'
+    ])
   )
 );
 
@@ -60,6 +68,30 @@ BEGIN
 END;
 $$;
 
+-- New writes must not persist signed URLs, credentials, raw file payloads, or
+-- oversized arbitrary JSON. NOT VALID avoids blocking rollout if legacy rows need
+-- separate review while still enforcing the constraint for new/updated rows.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'wilpay_private_files_metadata_safe'
+      AND conrelid = 'wilpay.private_files'::regclass
+  ) THEN
+    ALTER TABLE wilpay.private_files
+      ADD CONSTRAINT wilpay_private_files_metadata_safe CHECK (
+        jsonb_typeof(metadata) = 'object'
+        AND octet_length(metadata::text) <= 16384
+        AND NOT (metadata ?| ARRAY[
+          'data_url','signed_url','service_role','token','authorization',
+          'file_bytes','base64','secret','password','api_key'
+        ])
+      ) NOT VALID;
+  END IF;
+END;
+$$;
+
 CREATE INDEX IF NOT EXISTS wilpay_private_files_owner_idx
   ON wilpay.private_files (owner_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS wilpay_private_files_loan_idx
@@ -74,8 +106,37 @@ CREATE TABLE IF NOT EXISTS wilpay.file_audit_log (
   action text NOT NULL CHECK (action IN ('grant_requested','upload_completed','view_granted','metadata_updated','quarantined','archived')),
   occurred_at timestamptz NOT NULL DEFAULT now(),
   request_id text,
-  details jsonb NOT NULL DEFAULT '{}'::jsonb
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT wilpay_file_audit_details_safe CHECK (
+    jsonb_typeof(details) = 'object'
+    AND octet_length(details::text) <= 8192
+    AND NOT (details ?| ARRAY[
+      'data_url','signed_url','service_role','token','authorization',
+      'file_bytes','base64','secret','password','api_key'
+    ])
+  )
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'wilpay_file_audit_details_safe'
+      AND conrelid = 'wilpay.file_audit_log'::regclass
+  ) THEN
+    ALTER TABLE wilpay.file_audit_log
+      ADD CONSTRAINT wilpay_file_audit_details_safe CHECK (
+        jsonb_typeof(details) = 'object'
+        AND octet_length(details::text) <= 8192
+        AND NOT (details ?| ARRAY[
+          'data_url','signed_url','service_role','token','authorization',
+          'file_bytes','base64','secret','password','api_key'
+        ])
+      ) NOT VALID;
+  END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS wilpay_file_audit_file_idx
   ON wilpay.file_audit_log (file_id, occurred_at DESC);
