@@ -12,7 +12,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>
 );
 
-const APP_VERSION = 'v33-document-viewer';
+const APP_VERSION = 'v34-raster-safe';
 const isSecureContextForPwa = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
 if ('serviceWorker' in navigator && isSecureContextForPwa) {
   window.addEventListener('load', async () => {
