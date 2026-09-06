@@ -46,6 +46,34 @@ CREATE INDEX IF NOT EXISTS wilpay_file_audit_file_idx
 CREATE INDEX IF NOT EXISTS wilpay_file_audit_actor_idx
   ON wilpay.file_audit_log (actor_user_id, occurred_at DESC);
 
+-- Audit records are append-only. Application roles may INSERT audit events, but
+-- any UPDATE or DELETE attempt is rejected at the database layer.
+CREATE OR REPLACE FUNCTION wilpay.reject_file_audit_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'W.I.L Pay file audit log is append-only';
+END;
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgname = 'wilpay_file_audit_append_only'
+      AND tgrelid = 'wilpay.file_audit_log'::regclass
+      AND NOT tgisinternal
+  ) THEN
+    CREATE TRIGGER wilpay_file_audit_append_only
+      BEFORE UPDATE OR DELETE ON wilpay.file_audit_log
+      FOR EACH ROW
+      EXECUTE FUNCTION wilpay.reject_file_audit_mutation();
+  END IF;
+END;
+$$;
+
 -- Fail closed for generic database roles. Application/server roles must be granted
 -- only the minimum privileges they need by the infrastructure owner.
 REVOKE ALL ON SCHEMA wilpay FROM PUBLIC;
@@ -57,4 +85,4 @@ COMMENT ON TABLE wilpay.private_files IS
 COMMENT ON COLUMN wilpay.private_files.object_key IS
   'Private storage object key. Signed URLs are generated on demand and are never persisted.';
 COMMENT ON TABLE wilpay.file_audit_log IS
-  'Append-oriented audit trail for private file lifecycle events.';
+  'Append-only audit trail for private file lifecycle events; UPDATE and DELETE are rejected by trigger.';
