@@ -26,6 +26,8 @@ jobs:
           node-version: 22
       - name: Install
         run: npm install
+      - name: Test storage contract
+        run: npm test
       - name: Build
         run: npm run build
       - name: Setup Pages
