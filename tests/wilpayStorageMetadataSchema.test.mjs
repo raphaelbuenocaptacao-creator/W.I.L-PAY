@@ -24,6 +24,12 @@ assert.match(sql, /RAISE EXCEPTION 'W\.I\.L Pay file audit log is append-only';/
 assert.match(sql, /REVOKE ALL ON SCHEMA wilpay FROM PUBLIC;/);
 assert.match(sql, /REVOKE ALL ON ALL TABLES IN SCHEMA wilpay FROM PUBLIC;/);
 
+// Audit events must always point to real W.I.L Pay file metadata. The FK is
+// restrictive so metadata cannot be removed or re-keyed while audit history exists.
+assert.match(sql, /CONSTRAINT wilpay_file_audit_file_fk FOREIGN KEY \(file_id\)/);
+assert.match(sql, /REFERENCES wilpay\.private_files\(file_id\) ON UPDATE RESTRICT ON DELETE RESTRICT/);
+assert.match(sql, /ADD CONSTRAINT wilpay_file_audit_file_fk[\s\S]*FOREIGN KEY \(file_id\)[\s\S]*NOT VALID;/);
+
 // New metadata writes must stay metadata-only: no persisted payloads, signed URLs,
 // credentials, or unbounded arbitrary JSON. Existing rows are not destructively rewritten.
 assert.match(sql, /CONSTRAINT wilpay_private_files_metadata_safe CHECK/);
