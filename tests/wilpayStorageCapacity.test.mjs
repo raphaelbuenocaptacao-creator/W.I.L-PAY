@@ -8,6 +8,10 @@ assert.match(sql, /CREATE INDEX IF NOT EXISTS wilpay_private_files_owner_loan_ty
 assert.match(sql, /owner_user_id,[\s\S]*loan_id,[\s\S]*document_type,[\s\S]*status,[\s\S]*created_at DESC/);
 assert.match(sql, /CREATE INDEX IF NOT EXISTS wilpay_file_audit_file_occurred_idx/);
 assert.match(sql, /CREATE OR REPLACE VIEW wilpay\.storage_usage_by_loan AS/);
+assert.match(sql, /CREATE OR REPLACE VIEW wilpay\.storage_usage_by_owner AS/);
+assert.match(sql, /CREATE OR REPLACE VIEW wilpay\.storage_usage_total AS/);
+assert.match(sql, /count\(DISTINCT loan_id\) FILTER \(WHERE uploaded_at IS NOT NULL\) AS loan_count/);
+assert.match(sql, /count\(DISTINCT owner_user_id\) FILTER \(WHERE uploaded_at IS NOT NULL\) AS client_count/);
 assert.match(sql, /count\(\*\) FILTER \(WHERE uploaded_at IS NOT NULL\) AS uploaded_file_count/);
 assert.match(sql, /sum\(size_bytes\) FILTER \(WHERE uploaded_at IS NOT NULL\)/);
 
@@ -15,7 +19,9 @@ for (const documentType of ['document', 'selfie', 'receipt', 'guarantee', 'histo
   assert.match(sql, new RegExp(`document_type = '${documentType}'`), `missing capacity count for ${documentType}`);
 }
 
-assert.match(sql, /REVOKE ALL ON wilpay\.storage_usage_by_loan FROM PUBLIC;/);
+for (const view of ['storage_usage_by_loan', 'storage_usage_by_owner', 'storage_usage_total']) {
+  assert.match(sql, new RegExp(`REVOKE ALL ON wilpay\\.${view} FROM PUBLIC;`));
+}
 
 for (const forbidden of [' bytea', 'captapro', 'gamificacao', 'service_role', 'signed_url']) {
   assert.equal(normalized.includes(forbidden), false, `capacity SQL contains forbidden token: ${forbidden}`);
