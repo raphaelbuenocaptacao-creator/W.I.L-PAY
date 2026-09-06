@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { WILPAY_STORAGE_LIMITS, buildWilpayObjectKey } from '../src/lib/wilpayStorage.js';
+import {
+  WILPAY_REQUIRED_FILE_METADATA,
+  WILPAY_STORAGE_LIMITS,
+  buildWilpayObjectKey
+} from '../src/lib/wilpayStorage.js';
 
 const policy = JSON.parse(
   await readFile(new URL('../infra/wilpay-storage-policy.json', import.meta.url), 'utf8')
@@ -13,6 +17,7 @@ assert.ok(policy.ownership.forbidden_project_names.includes('captapro'));
 assert.ok(policy.ownership.forbidden_project_names.includes('gamificacao'));
 
 assert.equal(policy.storage.visibility, 'private');
+assert.equal(policy.storage.bucket, WILPAY_STORAGE_LIMITS.bucket);
 assert.ok(policy.storage.minimum_supported_clients >= 1000);
 assert.equal(policy.storage.max_file_size_bytes, WILPAY_STORAGE_LIMITS.maxBytesPerFile);
 assert.deepEqual(
@@ -37,6 +42,10 @@ assert.match(sampleObjectKey, /^wilpay\/users\/user_123\/loans\/loan_456\/docume
 
 assert.equal(policy.database.store_binary_files, false);
 assert.equal(policy.database.store_metadata_only, true);
+assert.deepEqual(
+  [...policy.database.required_file_metadata].sort(),
+  [...WILPAY_REQUIRED_FILE_METADATA].sort()
+);
 assert.equal(policy.security.tenant_isolation, 'owner_user_id');
 assert.equal(policy.security.deny_anonymous_reads, true);
 assert.equal(policy.security.deny_cross_user_reads, true);
