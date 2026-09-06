@@ -1,0 +1,70 @@
+const HTTPS_PROTOCOL = 'https:';
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+function parseUploadUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ''));
+  } catch {
+    throw new Error('Invalid signed upload URL');
+  }
+  if (url.username || url.password) throw new Error('Signed upload URL must not contain credentials');
+  if (url.protocol !== HTTPS_PROTOCOL && !LOCAL_HOSTS.has(url.hostname)) {
+    throw new Error('Signed upload URL must use HTTPS');
+  }
+  return url;
+}
+
+export function assertWilpaySignedUploadGrant(grant, metadata) {
+  if (!grant || typeof grant !== 'object') throw new Error('Upload grant is required');
+  if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
+  if (grant.bucket !== metadata.bucket) throw new Error('Upload grant bucket mismatch');
+  if (grant.object_key !== metadata.object_key) throw new Error('Upload grant object key mismatch');
+  if (grant.content_type !== metadata.content_type) throw new Error('Upload grant content type mismatch');
+  if (grant.checksum_sha256 !== metadata.checksum_sha256) throw new Error('Upload grant checksum mismatch');
+  if (grant.method !== 'PUT') throw new Error('Upload grant must use PUT');
+  parseUploadUrl(grant.upload_url);
+  const expiresAt = new Date(grant.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) throw new Error('Invalid upload grant expiry');
+  const ttlMs = expiresAt.getTime() - Date.now();
+  if (ttlMs <= 0 || ttlMs > 10 * 60 * 1000) throw new Error('Upload grant expiry is not allowed');
+  return true;
+}
+
+export function buildWilpaySignedUploadRequest(metadata) {
+  if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
+  return Object.freeze({
+    file_id: metadata.file_id,
+    owner_user_id: metadata.owner_user_id,
+    loan_id: metadata.loan_id,
+    document_type: metadata.document_type,
+    bucket: metadata.bucket,
+    object_key: metadata.object_key,
+    content_type: metadata.content_type,
+    size_bytes: metadata.size_bytes,
+    checksum_sha256: metadata.checksum_sha256
+  });
+}
+
+export async function uploadWilpayPrivateFile({ file, metadata, grant, fetchImpl = fetch }) {
+  assertWilpaySignedUploadGrant(grant, metadata);
+  if (!file || typeof file !== 'object') throw new Error('File is required');
+  const response = await fetchImpl(grant.upload_url, {
+    method: 'PUT',
+    body: file,
+    headers: {
+      'Content-Type': metadata.content_type
+    },
+    credentials: 'omit',
+    cache: 'no-store',
+    redirect: 'error',
+    referrerPolicy: 'no-referrer'
+  });
+  if (!response?.ok) throw new Error(`Private upload failed (${response?.status ?? 'unknown'})`);
+  return Object.freeze({
+    file_id: metadata.file_id,
+    bucket: metadata.bucket,
+    object_key: metadata.object_key,
+    checksum_sha256: metadata.checksum_sha256
+  });
+}
