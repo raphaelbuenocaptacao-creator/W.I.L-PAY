@@ -1,7 +1,4 @@
-function mimeFromDataUrl(value = '') {
-  const match = String(value).match(/^data:([^;,]+)/i);
-  return match?.[1] || '';
-}
+import { isWilpayViewerSource, mimeFromViewerSource } from './lib/wilpayViewerSource.js';
 
 function fileNameFromAnchor(anchor) {
   const card = anchor.closest('.doc-card');
@@ -18,11 +15,11 @@ function closeViewer(overlay) {
   overlay.remove();
 }
 
-function openViewer(dataUrl, title) {
+function openViewer(source, title, declaredMime = '') {
   const existing = document.querySelector('.wil-document-viewer');
   if (existing) closeViewer(existing);
 
-  const mime = mimeFromDataUrl(dataUrl);
+  const mime = mimeFromViewerSource(source, declaredMime);
   const overlay = document.createElement('div');
   overlay.className = 'wil-document-viewer';
   overlay.setAttribute('role', 'dialog');
@@ -31,36 +28,33 @@ function openViewer(dataUrl, title) {
 
   const shell = document.createElement('div');
   shell.className = 'wil-document-viewer__shell';
-
   const header = document.createElement('div');
   header.className = 'wil-document-viewer__header';
-
   const heading = document.createElement('div');
   heading.className = 'wil-document-viewer__title';
   heading.innerHTML = `<small>VISUALIZAÇÃO SEGURA</small><b></b>`;
   heading.querySelector('b').textContent = title || 'Documento';
-
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'wil-document-viewer__close';
   close.textContent = 'Fechar ×';
   close.addEventListener('click', () => closeViewer(overlay));
-
   header.append(heading, close);
 
   const body = document.createElement('div');
   body.className = 'wil-document-viewer__body';
-
   if (mime.startsWith('image/')) {
     const image = document.createElement('img');
-    image.src = dataUrl;
+    image.src = source;
     image.alt = title || 'Documento';
+    image.referrerPolicy = 'no-referrer';
     image.className = 'wil-document-viewer__image';
     body.appendChild(image);
   } else if (mime === 'application/pdf') {
     const frame = document.createElement('iframe');
-    frame.src = dataUrl;
+    frame.src = source;
     frame.title = title || 'Documento PDF';
+    frame.referrerPolicy = 'no-referrer';
     frame.className = 'wil-document-viewer__pdf';
     body.appendChild(frame);
   } else {
@@ -73,8 +67,10 @@ function openViewer(dataUrl, title) {
   const footer = document.createElement('div');
   footer.className = 'wil-document-viewer__footer';
   const download = document.createElement('a');
-  download.href = dataUrl;
+  download.href = source;
   download.download = title || 'documento';
+  download.rel = 'noreferrer';
+  download.referrerPolicy = 'no-referrer';
   download.textContent = 'Salvar arquivo';
   download.className = 'wil-document-viewer__download';
   footer.appendChild(download);
@@ -84,22 +80,30 @@ function openViewer(dataUrl, title) {
   overlay.addEventListener('click', event => {
     if (event.target === overlay) closeViewer(overlay);
   });
-
   document.body.appendChild(overlay);
   document.body.classList.add('wil-viewer-open');
   close.focus();
 }
 
-function interceptDataLinks(event) {
-  const anchor = event.target.closest?.('a[href^="data:"]');
+function viewerAnchorFromEvent(event) {
+  const anchor = event.target.closest?.('a[href]');
+  if (!anchor) return null;
+  const source = anchor.getAttribute('href');
+  const privateFile = anchor.dataset.wilPrivateFile === '1';
+  return isWilpayViewerSource(source, { privateFile }) ? anchor : null;
+}
+
+function interceptViewerLinks(event) {
+  const anchor = viewerAnchorFromEvent(event);
   if (!anchor) return;
   event.preventDefault();
   event.stopPropagation();
-  openViewer(anchor.getAttribute('href'), fileNameFromAnchor(anchor));
+  openViewer(anchor.getAttribute('href'), fileNameFromAnchor(anchor), anchor.dataset.mimeType || '');
 }
 
 function improveLinkLabels(root = document) {
-  root.querySelectorAll?.('a[href^="data:"]').forEach(anchor => {
+  root.querySelectorAll?.('a[href^="data:"], a[data-wil-private-file="1"][href]').forEach(anchor => {
+    if (!isWilpayViewerSource(anchor.getAttribute('href'), { privateFile: anchor.dataset.wilPrivateFile === '1' })) return;
     if (anchor.dataset.wilViewerReady) return;
     anchor.dataset.wilViewerReady = '1';
     if (anchor.closest('.released')) anchor.textContent = 'Visualizar comprovante';
@@ -108,12 +112,11 @@ function improveLinkLabels(root = document) {
   });
 }
 
-document.addEventListener('click', interceptDataLinks, true);
+document.addEventListener('click', interceptViewerLinks, true);
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
   closeViewer(document.querySelector('.wil-document-viewer'));
 });
-
 const observer = new MutationObserver(() => improveLinkLabels(document));
 observer.observe(document.documentElement, { childList: true, subtree: true });
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => improveLinkLabels(document));
