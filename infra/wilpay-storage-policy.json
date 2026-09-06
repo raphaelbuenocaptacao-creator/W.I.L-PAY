@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "service": "wilpay",
+  "ownership": {
+    "project_slug": "wilpay",
+    "shared_with_other_apps": false,
+    "forbidden_project_names": ["captapro", "gamificacao"]
+  },
+  "storage": {
+    "visibility": "private",
+    "bucket": "wilpay-private-documents",
+    "minimum_supported_clients": 1000,
+    "max_file_size_bytes": 10485760,
+    "allowed_content_types": [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf"
+    ],
+    "object_key_template": "users/{user_id}/loans/{loan_id}/{document_type}/{file_id}",
+    "direct_public_urls": false,
+    "viewer_access": "short_lived_signed_url"
+  },
+  "database": {
+    "store_binary_files": false,
+    "store_metadata_only": true,
+    "required_file_metadata": [
+      "file_id",
+      "owner_user_id",
+      "loan_id",
+      "document_type",
+      "storage_provider",
+      "bucket",
+      "object_key",
+      "content_type",
+      "size_bytes",
+      "checksum_sha256",
+      "created_at"
+    ]
+  },
+  "security": {
+    "tenant_isolation": "owner_user_id",
+    "admin_access_audited": true,
+    "signed_url_ttl_seconds": 300,
+    "deny_anonymous_reads": true,
+    "deny_cross_user_reads": true,
+    "secrets_in_client_bundle": false
+  },
+  "migration": {
+    "existing_inline_data_urls": "preserve_until_verified_storage_copy",
+    "new_upload_target": "private_storage",
+    "destructive_cleanup_requires_explicit_approval": true
+  }
+}
