@@ -18,11 +18,11 @@ const metadata = {
   file_id: 'file_1',
   owner_user_id: 'user_1',
   loan_id: 'loan_1',
-  document_type: 'proof',
-  kind: 'proof',
+  document_type: 'receipt',
+  kind: 'receipt',
   storage_provider: 'private_storage',
   bucket: 'wilpay-private-documents',
-  object_key: 'wilpay/users/user_1/loans/loan_1/proof/file_1.pdf',
+  object_key: 'wilpay/users/user_1/loans/loan_1/receipt/file_1.pdf',
   content_type: 'application/pdf',
   mime_type: 'application/pdf',
   size_bytes: bytes.byteLength,
@@ -54,7 +54,7 @@ assert.deepEqual(buildWilpaySignedUploadRequest(metadata), {
 assert.equal('upload_url' in buildWilpaySignedUploadRequest(metadata), false);
 
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, bucket: 'captapro-private' }, metadata), /bucket mismatch/i);
-assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, object_key: 'wilpay/users/other/loans/loan_1/proof/file_1.pdf' }, metadata), /object key mismatch/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, object_key: 'wilpay/users/other/loans/loan_1/receipt/file_1.pdf' }, metadata), /object key mismatch/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'http://storage.example.test/upload' }, metadata), /HTTPS/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'https://user:secret@storage.example.test/upload' }, metadata), /credentials/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, expires_at: new Date(Date.now() + 11 * 60 * 1000).toISOString() }, metadata), /expiry/i);
