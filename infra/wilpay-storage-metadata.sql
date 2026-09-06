@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS wilpay.file_audit_log (
   occurred_at timestamptz NOT NULL DEFAULT now(),
   request_id text,
   details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT wilpay_file_audit_file_fk FOREIGN KEY (file_id)
+    REFERENCES wilpay.private_files(file_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT wilpay_file_audit_details_safe CHECK (
     jsonb_typeof(details) = 'object'
     AND octet_length(details::text) <= 8192
@@ -140,6 +142,25 @@ CREATE TABLE IF NOT EXISTS wilpay.file_audit_log (
     details::text !~* '"(data_url|signed_url|service_role|token|authorization|file_bytes|base64|secret|password|api_key)"[[:space:]]*:'
   )
 );
+
+-- Existing installations gain referential integrity without rewriting or deleting
+-- legacy audit rows. NOT VALID still enforces the FK for every new/updated row.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'wilpay_file_audit_file_fk'
+      AND conrelid = 'wilpay.file_audit_log'::regclass
+  ) THEN
+    ALTER TABLE wilpay.file_audit_log
+      ADD CONSTRAINT wilpay_file_audit_file_fk
+      FOREIGN KEY (file_id) REFERENCES wilpay.private_files(file_id)
+      ON UPDATE RESTRICT ON DELETE RESTRICT
+      NOT VALID;
+  END IF;
+END;
+$$;
 
 DO $$
 BEGIN
@@ -222,4 +243,4 @@ COMMENT ON TABLE wilpay.private_files IS
 COMMENT ON COLUMN wilpay.private_files.object_key IS
   'Private storage object key bound to the metadata owner and loan. Signed URLs are generated on demand and are never persisted.';
 COMMENT ON TABLE wilpay.file_audit_log IS
-  'Append-only audit trail for private file lifecycle events; UPDATE and DELETE are rejected by trigger.';
+  'Append-only audit trail bound to existing W.I.L Pay file metadata; UPDATE and DELETE are rejected by trigger.';
