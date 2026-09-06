@@ -52,6 +52,42 @@ export function validateWilpayUpload(file, { maxBytes = DEFAULT_MAX_BYTES } = {}
   return { size, mimeType, extension: extensionForMime(mimeType) };
 }
 
+export async function sha256WilpayFile(file) {
+  validateWilpayUpload(file);
+  if (typeof file.arrayBuffer !== 'function') throw new Error('File content is not readable');
+  if (!globalThis.crypto?.subtle) throw new Error('Secure SHA-256 is unavailable');
+  const bytes = await file.arrayBuffer();
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function prepareWilpayPrivateUpload({
+  userId,
+  loanId,
+  kind,
+  fileId,
+  file,
+  storageProvider,
+  createdAt
+}) {
+  const checksumSha256 = await sha256WilpayFile(file);
+  const metadata = buildWilpayFileMetadata({
+    userId,
+    loanId,
+    kind,
+    fileId,
+    file,
+    checksumSha256,
+    storageProvider,
+    createdAt
+  });
+  assertWilpayFileMetadata(metadata);
+  return Object.freeze({
+    file,
+    metadata: Object.freeze(metadata)
+  });
+}
+
 export function buildWilpayObjectKey({ userId, loanId, kind, fileId, mimeType }) {
   const safeUserId = safeSegment(userId, 'userId');
   const safeLoanId = safeSegment(loanId, 'loanId');
