@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS wilpay.private_files (
       'data_url','signed_url','service_role','token','authorization',
       'file_bytes','base64','secret','password','api_key'
     ])
+  ),
+  CONSTRAINT wilpay_private_files_metadata_nested_safe CHECK (
+    metadata::text !~* '"(data_url|signed_url|service_role|token|authorization|file_bytes|base64|secret|password|api_key)"[[:space:]]*:'
   )
 );
 
@@ -92,6 +95,24 @@ BEGIN
 END;
 $$;
 
+-- Defense in depth: sensitive keys are forbidden at every JSON nesting level,
+-- not only at the root. This is additive and does not rewrite legacy rows.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'wilpay_private_files_metadata_nested_safe'
+      AND conrelid = 'wilpay.private_files'::regclass
+  ) THEN
+    ALTER TABLE wilpay.private_files
+      ADD CONSTRAINT wilpay_private_files_metadata_nested_safe CHECK (
+        metadata::text !~* '"(data_url|signed_url|service_role|token|authorization|file_bytes|base64|secret|password|api_key)"[[:space:]]*:'
+      ) NOT VALID;
+  END IF;
+END;
+$$;
+
 CREATE INDEX IF NOT EXISTS wilpay_private_files_owner_idx
   ON wilpay.private_files (owner_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS wilpay_private_files_loan_idx
@@ -114,6 +135,9 @@ CREATE TABLE IF NOT EXISTS wilpay.file_audit_log (
       'data_url','signed_url','service_role','token','authorization',
       'file_bytes','base64','secret','password','api_key'
     ])
+  ),
+  CONSTRAINT wilpay_file_audit_details_nested_safe CHECK (
+    details::text !~* '"(data_url|signed_url|service_role|token|authorization|file_bytes|base64|secret|password|api_key)"[[:space:]]*:'
   )
 );
 
@@ -133,6 +157,22 @@ BEGIN
           'data_url','signed_url','service_role','token','authorization',
           'file_bytes','base64','secret','password','api_key'
         ])
+      ) NOT VALID;
+  END IF;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'wilpay_file_audit_details_nested_safe'
+      AND conrelid = 'wilpay.file_audit_log'::regclass
+  ) THEN
+    ALTER TABLE wilpay.file_audit_log
+      ADD CONSTRAINT wilpay_file_audit_details_nested_safe CHECK (
+        details::text !~* '"(data_url|signed_url|service_role|token|authorization|file_bytes|base64|secret|password|api_key)"[[:space:]]*:'
       ) NOT VALID;
   END IF;
 END;
