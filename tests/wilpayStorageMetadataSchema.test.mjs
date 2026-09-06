@@ -39,6 +39,15 @@ for (const sensitiveKey of [
 assert.match(sql, /ADD CONSTRAINT wilpay_private_files_metadata_safe[\s\S]*NOT VALID;/);
 assert.match(sql, /ADD CONSTRAINT wilpay_file_audit_details_safe[\s\S]*NOT VALID;/);
 
+// Root-only key checks are not enough: nested objects/arrays must not be able to
+// persist credentials, signed URLs or raw payload markers either.
+assert.match(sql, /CONSTRAINT wilpay_private_files_metadata_nested_safe CHECK/);
+assert.match(sql, /CONSTRAINT wilpay_file_audit_details_nested_safe CHECK/);
+assert.match(sql, /metadata::text !~\* '\"\(data_url\|signed_url\|service_role\|token\|authorization\|file_bytes\|base64\|secret\|password\|api_key\)\"\[\[:space:\]\]\*:'/);
+assert.match(sql, /details::text !~\* '\"\(data_url\|signed_url\|service_role\|token\|authorization\|file_bytes\|base64\|secret\|password\|api_key\)\"\[\[:space:\]\]\*:'/);
+assert.match(sql, /ADD CONSTRAINT wilpay_private_files_metadata_nested_safe[\s\S]*NOT VALID;/);
+assert.match(sql, /ADD CONSTRAINT wilpay_file_audit_details_nested_safe[\s\S]*NOT VALID;/);
+
 for (const forbidden of [' bytea', 'captapro', 'gamificacao']) {
   assert.equal(normalized.includes(forbidden), false, `schema contains forbidden token: ${forbidden}`);
 }
