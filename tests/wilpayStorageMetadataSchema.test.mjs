@@ -24,8 +24,23 @@ assert.match(sql, /RAISE EXCEPTION 'W\.I\.L Pay file audit log is append-only';/
 assert.match(sql, /REVOKE ALL ON SCHEMA wilpay FROM PUBLIC;/);
 assert.match(sql, /REVOKE ALL ON ALL TABLES IN SCHEMA wilpay FROM PUBLIC;/);
 
-for (const forbidden of [' bytea', 'base64 ', 'data_url ', 'service_role', 'captaPro', 'gamificacao']) {
-  assert.equal(normalized.includes(forbidden.toLowerCase()), false, `schema contains forbidden token: ${forbidden}`);
+// New metadata writes must stay metadata-only: no persisted payloads, signed URLs,
+// credentials, or unbounded arbitrary JSON. Existing rows are not destructively rewritten.
+assert.match(sql, /CONSTRAINT wilpay_private_files_metadata_safe CHECK/);
+assert.match(sql, /CONSTRAINT wilpay_file_audit_details_safe CHECK/);
+assert.match(sql, /octet_length\(metadata::text\) <= 16384/);
+assert.match(sql, /octet_length\(details::text\) <= 8192/);
+for (const sensitiveKey of [
+  'data_url', 'signed_url', 'service_role', 'token', 'authorization',
+  'file_bytes', 'base64', 'secret', 'password', 'api_key',
+]) {
+  assert.match(sql, new RegExp(`'${sensitiveKey}'`), `missing blocked metadata key: ${sensitiveKey}`);
+}
+assert.match(sql, /ADD CONSTRAINT wilpay_private_files_metadata_safe[\s\S]*NOT VALID;/);
+assert.match(sql, /ADD CONSTRAINT wilpay_file_audit_details_safe[\s\S]*NOT VALID;/);
+
+for (const forbidden of [' bytea', 'captapro', 'gamificacao']) {
+  assert.equal(normalized.includes(forbidden), false, `schema contains forbidden token: ${forbidden}`);
 }
 
 for (const destructive of ['drop table', 'drop schema', 'truncate ', 'delete from']) {
