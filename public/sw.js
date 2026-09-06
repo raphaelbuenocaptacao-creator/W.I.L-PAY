@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v33-document-viewer`;
+const CACHE = `${CACHE_PREFIX}v34-raster-safe`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -27,11 +27,19 @@ function isPrivate(request, url) {
     hasSensitiveQuery(url);
 }
 
+function hasPrivateVary(response) {
+  const vary = (response.headers.get('vary') || '').toLowerCase();
+  return vary.split(',').some(value => {
+    const token = value.trim();
+    return token === 'cookie' || token === 'authorization';
+  });
+}
+
 function isCacheableResponse(response) {
   if (!response || !response.ok || response.status === 206 || response.type === 'opaque' || response.redirected) return false;
   const cacheControl = (response.headers.get('cache-control') || '').toLowerCase();
   if (cacheControl.includes('private') || cacheControl.includes('no-store')) return false;
-  if (response.headers.has('set-cookie') || response.headers.has('content-range')) return false;
+  if (response.headers.has('set-cookie') || response.headers.has('content-range') || hasPrivateVary(response)) return false;
   return true;
 }
 
@@ -61,7 +69,7 @@ self.addEventListener('activate', event => {
       try {
         await client.navigate(client.url);
       } catch {
-        try { client.postMessage({ type: 'WILPAY_UPDATE_READY', version: 'v33-document-viewer' }); } catch {}
+        try { client.postMessage({ type: 'WILPAY_UPDATE_READY', version: 'v34-raster-safe' }); } catch {}
       }
     }));
   })());
