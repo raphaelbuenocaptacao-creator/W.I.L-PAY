@@ -10,14 +10,14 @@
     "visibility": "private",
     "bucket": "wilpay-private-documents",
     "minimum_supported_clients": 1000,
-    "max_file_size_bytes": 10485760,
+    "max_file_size_bytes": 15728640,
     "allowed_content_types": [
       "image/jpeg",
       "image/png",
       "image/webp",
       "application/pdf"
     ],
-    "object_key_template": "users/{user_id}/loans/{loan_id}/{document_type}/{file_id}",
+    "object_key_template": "wilpay/users/{user_id}/loans/{loan_id}/{document_type}/{file_id}.{extension}",
     "direct_public_urls": false,
     "viewer_access": "short_lived_signed_url"
   },
