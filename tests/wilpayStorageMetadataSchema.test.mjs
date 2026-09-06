@@ -12,6 +12,9 @@ assert.match(sql, /storage_scope\s+text\s+NOT NULL[\s\S]*wilpay-private/);
 assert.match(sql, /size_bytes\s+bigint\s+NOT NULL[\s\S]*15728640/);
 assert.match(sql, /checksum_sha256\s+text\s+NOT NULL[\s\S]*\^\[a-f0-9\]\{64\}\$/);
 assert.match(sql, /object_key LIKE 'wilpay\/users\/%\/loans\/%'/);
+assert.match(sql, /CREATE OR REPLACE FUNCTION wilpay\.reject_file_audit_mutation\(\)/);
+assert.match(sql, /CREATE TRIGGER wilpay_file_audit_append_only[\s\S]*BEFORE UPDATE OR DELETE ON wilpay\.file_audit_log/);
+assert.match(sql, /RAISE EXCEPTION 'W\.I\.L Pay file audit log is append-only';/);
 assert.match(sql, /REVOKE ALL ON SCHEMA wilpay FROM PUBLIC;/);
 assert.match(sql, /REVOKE ALL ON ALL TABLES IN SCHEMA wilpay FROM PUBLIC;/);
 
