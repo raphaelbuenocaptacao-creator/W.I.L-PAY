@@ -1,7 +1,11 @@
 const DEFAULT_MAX_BYTES = 15 * 1024 * 1024;
 const STORAGE_SCOPE = 'wilpay-private';
 const STORAGE_BUCKET = 'wilpay-private-documents';
-const ALLOWED_KINDS = new Set(['document', 'selfie', 'proof', 'collateral', 'history']);
+const ALLOWED_KINDS = new Set(['document', 'selfie', 'receipt', 'guarantee', 'history']);
+const KIND_ALIASES = Object.freeze({
+  proof: 'receipt',
+  collateral: 'guarantee'
+});
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
@@ -16,6 +20,13 @@ function safeSegment(value, label) {
     throw new Error(`Invalid ${label}`);
   }
   return normalized;
+}
+
+function normalizeKind(kind) {
+  const safeKind = safeSegment(kind, 'kind');
+  const canonicalKind = KIND_ALIASES[safeKind] ?? safeKind;
+  if (!ALLOWED_KINDS.has(canonicalKind)) throw new Error('Invalid kind');
+  return canonicalKind;
 }
 
 function extensionForMime(mimeType) {
@@ -92,10 +103,9 @@ export function buildWilpayObjectKey({ userId, loanId, kind, fileId, mimeType })
   const safeUserId = safeSegment(userId, 'userId');
   const safeLoanId = safeSegment(loanId, 'loanId');
   const safeFileId = safeSegment(fileId, 'fileId');
-  const safeKind = safeSegment(kind, 'kind');
-  if (!ALLOWED_KINDS.has(safeKind)) throw new Error('Invalid kind');
+  const canonicalKind = normalizeKind(kind);
   if (!ALLOWED_MIME_TYPES.has(mimeType)) throw new Error('Invalid mimeType');
-  return `wilpay/users/${safeUserId}/loans/${safeLoanId}/${safeKind}/${safeFileId}.${extensionForMime(mimeType)}`;
+  return `wilpay/users/${safeUserId}/loans/${safeLoanId}/${canonicalKind}/${safeFileId}.${extensionForMime(mimeType)}`;
 }
 
 export function buildWilpayFileMetadata({
@@ -110,13 +120,14 @@ export function buildWilpayFileMetadata({
 }) {
   const { size, mimeType } = validateWilpayUpload(file);
   const safeProvider = safeSegment(storageProvider, 'storageProvider');
-  const objectKey = buildWilpayObjectKey({ userId, loanId, kind, fileId, mimeType });
+  const canonicalKind = normalizeKind(kind);
+  const objectKey = buildWilpayObjectKey({ userId, loanId, kind: canonicalKind, fileId, mimeType });
   return {
     file_id: safeSegment(fileId, 'fileId'),
     owner_user_id: safeSegment(userId, 'userId'),
     loan_id: safeSegment(loanId, 'loanId'),
-    document_type: safeSegment(kind, 'kind'),
-    kind: safeSegment(kind, 'kind'),
+    document_type: canonicalKind,
+    kind: canonicalKind,
     storage_provider: safeProvider,
     bucket: STORAGE_BUCKET,
     object_key: objectKey,
@@ -138,10 +149,14 @@ export function assertWilpayFileMetadata(metadata) {
   if (metadata.bucket !== STORAGE_BUCKET) throw new Error('Metadata bucket must remain W.I.L Pay private');
   safeSegment(metadata.storage_provider, 'storageProvider');
   const documentType = metadata.document_type ?? metadata.kind;
+  const canonicalDocumentType = normalizeKind(documentType);
+  if (documentType !== canonicalDocumentType) {
+    throw new Error('Metadata document_type must use the canonical W.I.L Pay storage type');
+  }
   const expectedKey = buildWilpayObjectKey({
     userId: metadata.owner_user_id,
     loanId: metadata.loan_id,
-    kind: documentType,
+    kind: canonicalDocumentType,
     fileId: metadata.file_id,
     mimeType: metadata.content_type ?? metadata.mime_type
   });
