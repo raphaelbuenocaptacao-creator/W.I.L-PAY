@@ -21,8 +21,44 @@ CREATE TABLE IF NOT EXISTS wilpay.private_files (
   uploaded_at timestamptz,
   archived_at timestamptz,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  CONSTRAINT wilpay_object_key_scope CHECK (object_key LIKE 'wilpay/users/%/loans/%')
+  CONSTRAINT wilpay_object_key_scope CHECK (object_key LIKE 'wilpay/users/%/loans/%'),
+  CONSTRAINT wilpay_object_key_owner_loan_scope CHECK (
+    owner_user_id <> ''
+    AND loan_id <> ''
+    AND position('/' IN owner_user_id) = 0
+    AND position('/' IN loan_id) = 0
+    AND left(
+      object_key,
+      length('wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/')
+    ) = 'wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/'
+    AND length(object_key) > length('wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/')
+  )
 );
+
+-- Existing non-destructive installations also receive the tenant/loan binding.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'wilpay_object_key_owner_loan_scope'
+      AND conrelid = 'wilpay.private_files'::regclass
+  ) THEN
+    ALTER TABLE wilpay.private_files
+      ADD CONSTRAINT wilpay_object_key_owner_loan_scope CHECK (
+        owner_user_id <> ''
+        AND loan_id <> ''
+        AND position('/' IN owner_user_id) = 0
+        AND position('/' IN loan_id) = 0
+        AND left(
+          object_key,
+          length('wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/')
+        ) = 'wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/'
+        AND length(object_key) > length('wilpay/users/' || owner_user_id || '/loans/' || loan_id || '/')
+      );
+  END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS wilpay_private_files_owner_idx
   ON wilpay.private_files (owner_user_id, created_at DESC);
@@ -83,6 +119,6 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA wilpay FROM PUBLIC;
 COMMENT ON TABLE wilpay.private_files IS
   'W.I.L Pay file metadata only; never store document bytes, base64, data URLs, signed URLs, or credentials here.';
 COMMENT ON COLUMN wilpay.private_files.object_key IS
-  'Private storage object key. Signed URLs are generated on demand and are never persisted.';
+  'Private storage object key bound to the metadata owner and loan. Signed URLs are generated on demand and are never persisted.';
 COMMENT ON TABLE wilpay.file_audit_log IS
   'Append-only audit trail for private file lifecycle events; UPDATE and DELETE are rejected by trigger.';
