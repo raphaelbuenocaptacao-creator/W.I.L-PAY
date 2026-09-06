@@ -1,20 +1,35 @@
 import assert from 'node:assert/strict';
 import {
   assertWilpaySignedUploadGrant,
+  assertWilpayUploadContent,
   buildWilpaySignedUploadRequest,
   uploadWilpayPrivateFile
 } from '../src/lib/wilpaySignedUpload.js';
+
+const bytes = new TextEncoder().encode('test');
+const checksum = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+const file = {
+  size: bytes.byteLength,
+  type: 'application/pdf',
+  arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+};
 
 const metadata = {
   file_id: 'file_1',
   owner_user_id: 'user_1',
   loan_id: 'loan_1',
   document_type: 'proof',
+  kind: 'proof',
+  storage_provider: 'private_storage',
   bucket: 'wilpay-private-documents',
   object_key: 'wilpay/users/user_1/loans/loan_1/proof/file_1.pdf',
   content_type: 'application/pdf',
-  size_bytes: 100,
-  checksum_sha256: 'a'.repeat(64)
+  mime_type: 'application/pdf',
+  size_bytes: bytes.byteLength,
+  checksum_sha256: checksum,
+  created_at: '2026-09-06T00:00:00.000Z',
+  storage_scope: 'wilpay-private',
+  visibility: 'private'
 };
 
 const grant = {
@@ -25,7 +40,17 @@ const grant = {
 };
 
 assert.equal(assertWilpaySignedUploadGrant(grant, metadata), true);
-assert.deepEqual(buildWilpaySignedUploadRequest(metadata), metadata);
+assert.deepEqual(buildWilpaySignedUploadRequest(metadata), {
+  file_id: metadata.file_id,
+  owner_user_id: metadata.owner_user_id,
+  loan_id: metadata.loan_id,
+  document_type: metadata.document_type,
+  bucket: metadata.bucket,
+  object_key: metadata.object_key,
+  content_type: metadata.content_type,
+  size_bytes: metadata.size_bytes,
+  checksum_sha256: metadata.checksum_sha256
+});
 assert.equal('upload_url' in buildWilpaySignedUploadRequest(metadata), false);
 
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, bucket: 'captapro-private' }, metadata), /bucket mismatch/i);
@@ -34,9 +59,28 @@ assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'http:
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'https://user:secret@storage.example.test/upload' }, metadata), /credentials/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, expires_at: new Date(Date.now() + 11 * 60 * 1000).toISOString() }, metadata), /expiry/i);
 
+assert.equal(await assertWilpayUploadContent(file, metadata), true);
+await assert.rejects(
+  () => assertWilpayUploadContent({ ...file, size: file.size + 1 }, metadata),
+  /size mismatch/i
+);
+await assert.rejects(
+  () => assertWilpayUploadContent({ ...file, type: 'image/png' }, metadata),
+  /content type mismatch/i
+);
+const tamperedBytes = new TextEncoder().encode('evil');
+await assert.rejects(
+  () => assertWilpayUploadContent({
+    size: tamperedBytes.byteLength,
+    type: 'application/pdf',
+    arrayBuffer: async () => tamperedBytes.buffer.slice(tamperedBytes.byteOffset, tamperedBytes.byteOffset + tamperedBytes.byteLength)
+  }, metadata),
+  /checksum mismatch/i
+);
+
 let request;
 const result = await uploadWilpayPrivateFile({
-  file: { size: 100, type: 'application/pdf' },
+  file,
   metadata,
   grant,
   fetchImpl: async (url, options) => {
