@@ -9,10 +9,10 @@ assert.match(sql, /content_type = 'application\/pdf'/);
 assert.match(sql, /content_type = 'image\/jpeg'/);
 assert.match(sql, /content_type = 'image\/png'/);
 assert.match(sql, /content_type = 'image\/webp'/);
-assert.match(sql, /\\\.pdf\$/);
-assert.match(sql, /\\\.\(jpg\|jpeg\)\$/);
-assert.match(sql, /\\\.png\$/);
-assert.match(sql, /\\\.webp\$/);
+assert.match(sql, /\[\.\]pdf\$/);
+assert.match(sql, /\[\.\]\(jpg\|jpeg\)\$/);
+assert.match(sql, /\[\.\]png\$/);
+assert.match(sql, /\[\.\]webp\$/);
 assert.match(sql, /NOT VALID;/);
 
 for (const forbidden of ['captapro', 'gamificacao', 'drop table', 'drop schema', 'truncate ', 'delete from']) {
