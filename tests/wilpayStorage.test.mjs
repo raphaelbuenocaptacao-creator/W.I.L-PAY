@@ -37,13 +37,25 @@ assert.equal(metadata.storage_scope, 'wilpay-private');
 assert.equal(metadata.visibility, 'private');
 assert.equal(metadata.storage_provider, 'private_storage');
 assert.equal(metadata.bucket, 'wilpay-private-documents');
-assert.equal(metadata.document_type, 'proof');
+assert.equal(metadata.document_type, 'receipt');
+assert.equal(metadata.kind, 'receipt');
 assert.equal(metadata.content_type, 'application/pdf');
 assert.equal(metadata.size_bytes, 2048);
 assert.equal(metadata.checksum_sha256, checksum);
 assert.equal(metadata.created_at, '2026-09-06T00:00:00.000Z');
-assert.equal(metadata.object_key, 'wilpay/users/user_123/loans/loan_456/proof/file_789.pdf');
+assert.equal(metadata.object_key, 'wilpay/users/user_123/loans/loan_456/receipt/file_789.pdf');
 assert.equal(assertWilpayFileMetadata(metadata), true);
+
+assert.equal(
+  buildWilpayObjectKey({
+    userId: 'user_123',
+    loanId: 'loan_456',
+    kind: 'collateral',
+    fileId: 'file_guarantee',
+    mimeType: 'image/jpeg'
+  }),
+  'wilpay/users/user_123/loans/loan_456/guarantee/file_guarantee.jpg'
+);
 
 const fileBytes = new TextEncoder().encode('wilpay-private-upload');
 const readableFile = {
@@ -81,7 +93,8 @@ assert.throws(() => buildWilpayFileMetadata({ userId: 'user', loanId: 'loan', ki
 assert.throws(() => assertWilpayFileMetadata({ ...metadata, checksum_sha256: null }), /required/i);
 assert.throws(() => assertWilpayFileMetadata({ ...metadata, storage_scope: 'captapro-private' }), /private storage/i);
 assert.throws(() => assertWilpayFileMetadata({ ...metadata, bucket: 'captapro-documents' }), /bucket/i);
-assert.throws(() => assertWilpayFileMetadata({ ...metadata, object_key: 'wilpay/users/other/loans/loan_456/proof/file_789.pdf' }), /object_key/i);
+assert.throws(() => assertWilpayFileMetadata({ ...metadata, document_type: 'proof' }), /canonical/i);
+assert.throws(() => assertWilpayFileMetadata({ ...metadata, object_key: 'wilpay/users/other/loans/loan_456/receipt/file_789.pdf' }), /object_key/i);
 await assert.rejects(() => sha256WilpayFile({ ...readableFile, arrayBuffer: undefined }), /readable/i);
 
 console.log('wilpayStorage tests passed');
