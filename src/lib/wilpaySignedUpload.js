@@ -3,7 +3,36 @@ import { assertWilpayFileMetadata, sha256WilpayFile } from './wilpayStorage.js';
 const HTTPS_PROTOCOL = 'https:';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 
-function parseUploadUrl(value) {
+function configuredUploadOrigins() {
+  const raw = import.meta.env?.VITE_WILPAY_STORAGE_UPLOAD_ORIGINS;
+  if (!raw) return [];
+  return String(raw)
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean);
+}
+
+function normalizeAllowedUploadOrigins(values) {
+  const list = values ?? configuredUploadOrigins();
+  if (!Array.isArray(list)) throw new Error('Allowed upload origins must be a list');
+  return new Set(list.map(value => {
+    let url;
+    try {
+      url = new URL(String(value || ''));
+    } catch {
+      throw new Error('Invalid allowed upload origin');
+    }
+    if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+      throw new Error('Invalid allowed upload origin');
+    }
+    if (url.protocol !== HTTPS_PROTOCOL && !LOCAL_HOSTS.has(url.hostname)) {
+      throw new Error('Allowed upload origin must use HTTPS');
+    }
+    return url.origin;
+  }));
+}
+
+function parseUploadUrl(value, allowedUploadOrigins) {
   let url;
   try {
     url = new URL(String(value || ''));
@@ -14,10 +43,17 @@ function parseUploadUrl(value) {
   if (url.protocol !== HTTPS_PROTOCOL && !LOCAL_HOSTS.has(url.hostname)) {
     throw new Error('Signed upload URL must use HTTPS');
   }
+  const allowedOrigins = normalizeAllowedUploadOrigins(allowedUploadOrigins);
+  if (allowedOrigins.size === 0) {
+    throw new Error('W.I.L Pay private storage upload origin is not configured');
+  }
+  if (!allowedOrigins.has(url.origin)) {
+    throw new Error('Signed upload URL origin is not allowed for W.I.L Pay private storage');
+  }
   return url;
 }
 
-export function assertWilpaySignedUploadGrant(grant, metadata) {
+export function assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOrigins } = {}) {
   if (!grant || typeof grant !== 'object') throw new Error('Upload grant is required');
   if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
   assertWilpayFileMetadata(metadata);
@@ -26,7 +62,7 @@ export function assertWilpaySignedUploadGrant(grant, metadata) {
   if (grant.content_type !== metadata.content_type) throw new Error('Upload grant content type mismatch');
   if (grant.checksum_sha256 !== metadata.checksum_sha256) throw new Error('Upload grant checksum mismatch');
   if (grant.method !== 'PUT') throw new Error('Upload grant must use PUT');
-  parseUploadUrl(grant.upload_url);
+  parseUploadUrl(grant.upload_url, allowedUploadOrigins);
   const expiresAt = new Date(grant.expires_at);
   if (Number.isNaN(expiresAt.getTime())) throw new Error('Invalid upload grant expiry');
   const ttlMs = expiresAt.getTime() - Date.now();
@@ -62,8 +98,14 @@ export async function assertWilpayUploadContent(file, metadata) {
   return true;
 }
 
-export async function uploadWilpayPrivateFile({ file, metadata, grant, fetchImpl = fetch }) {
-  assertWilpaySignedUploadGrant(grant, metadata);
+export async function uploadWilpayPrivateFile({
+  file,
+  metadata,
+  grant,
+  allowedUploadOrigins,
+  fetchImpl = fetch
+}) {
+  assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOrigins });
   await assertWilpayUploadContent(file, metadata);
   const response = await fetchImpl(grant.upload_url, {
     method: 'PUT',
