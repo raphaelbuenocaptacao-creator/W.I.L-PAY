@@ -38,8 +38,11 @@ const grant = {
   upload_url: 'https://storage.example.test/signed-upload',
   expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
 };
+const uploadPolicy = {
+  allowedUploadOrigins: ['https://storage.example.test']
+};
 
-assert.equal(assertWilpaySignedUploadGrant(grant, metadata), true);
+assert.equal(assertWilpaySignedUploadGrant(grant, metadata, uploadPolicy), true);
 assert.deepEqual(buildWilpaySignedUploadRequest(metadata), {
   file_id: metadata.file_id,
   owner_user_id: metadata.owner_user_id,
@@ -53,11 +56,13 @@ assert.deepEqual(buildWilpaySignedUploadRequest(metadata), {
 });
 assert.equal('upload_url' in buildWilpaySignedUploadRequest(metadata), false);
 
-assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, bucket: 'captapro-private' }, metadata), /bucket mismatch/i);
-assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, object_key: 'wilpay/users/other/loans/loan_1/receipt/file_1.pdf' }, metadata), /object key mismatch/i);
-assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'http://storage.example.test/upload' }, metadata), /HTTPS/i);
-assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'https://user:secret@storage.example.test/upload' }, metadata), /credentials/i);
-assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, expires_at: new Date(Date.now() + 11 * 60 * 1000).toISOString() }, metadata), /expiry/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, bucket: 'captapro-private' }, metadata, uploadPolicy), /bucket mismatch/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, object_key: 'wilpay/users/other/loans/loan_1/receipt/file_1.pdf' }, metadata, uploadPolicy), /object key mismatch/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'http://storage.example.test/upload' }, metadata, uploadPolicy), /HTTPS/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'https://user:secret@storage.example.test/upload' }, metadata, uploadPolicy), /credentials/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'https://external.example.test/upload' }, metadata, uploadPolicy), /origin is not allowed/i);
+assert.throws(() => assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOrigins: [] }), /origin is not configured/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, expires_at: new Date(Date.now() + 11 * 60 * 1000).toISOString() }, metadata, uploadPolicy), /expiry/i);
 
 assert.equal(await assertWilpayUploadContent(file, metadata), true);
 await assert.rejects(
@@ -83,6 +88,7 @@ const result = await uploadWilpayPrivateFile({
   file,
   metadata,
   grant,
+  allowedUploadOrigins: uploadPolicy.allowedUploadOrigins,
   fetchImpl: async (url, options) => {
     request = { url, options };
     return { ok: true, status: 200 };
