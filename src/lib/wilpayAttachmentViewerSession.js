@@ -6,6 +6,15 @@ function isPrivateRecord(record) {
   return Boolean(record?.file_id || record?.object_key);
 }
 
+function assertAttachmentRecord(record) {
+  if (!record || typeof record !== 'object') throw new Error('attachment record is required');
+  // Preserve old attachment rows created before record_type existed, but never
+  // allow an explicitly typed loan/location row to reach the private grant API.
+  if (record.record_type && record.record_type !== 'ATTACHMENT') {
+    throw new Error('record is not an attachment');
+  }
+}
+
 export async function resolveWilpayAttachmentForCurrentSession(
   record,
   {
@@ -14,6 +23,7 @@ export async function resolveWilpayAttachmentForCurrentSession(
     now = Date.now()
   } = {}
 ) {
+  assertAttachmentRecord(record);
   let requester = requestViewerGrant;
 
   // Legacy data URLs do not need a backend call. Metadata-only records do,
