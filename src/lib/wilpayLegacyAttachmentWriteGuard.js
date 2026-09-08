@@ -1,6 +1,16 @@
 import { wilpayPrivateUploadRuntimeStatus } from './wilpayPrivateUploadSession.js';
 import { persistWilpayAppAttachment } from './wilpayAppAttachmentAdapter.js';
 
+const PRIVATE_ATTACHMENT_DOC_TYPES = new Set([
+  'DOCUMENTO_FOTO',
+  'COMPROVANTE_RESIDENCIA',
+  'SELFIE_DOCUMENTO',
+  'GARANTIA_FOTO_1',
+  'GARANTIA_FOTO_2',
+  'GARANTIA_FOTO_3',
+  'COMPROVANTE_PAGAMENTO'
+]);
+
 function resultBuilder(promise) {
   return {
     select() { return this; },
@@ -28,6 +38,10 @@ function fileFromLegacyAttachment(item) {
     size: item.size,
     data_url: item.data_url
   };
+}
+
+function normalizedDocType(item) {
+  return String(item?.doc_type || '').trim().toUpperCase();
 }
 
 export function installWilpayLegacyAttachmentWriteGuard(
@@ -77,11 +91,18 @@ export function installWilpayLegacyAttachmentWriteGuard(
         }
 
         const item = legacyAttachments[0];
+        const docType = normalizedDocType(item);
+        if (!PRIVATE_ATTACHMENT_DOC_TYPES.has(docType)) {
+          return blockedBuilder(
+            'Tipo de anexo não permitido no Storage privado do W.I.L Pay.'
+          );
+        }
+
         const routed = persistAttachment({
           neon: persistenceClient,
           authUid: item.auth_uid,
           loanId: item.loan_id,
-          docType: item.doc_type,
+          docType,
           file: fileFromLegacyAttachment(item),
           createdAt: item.created_at,
           runtimeStatus: () => status
