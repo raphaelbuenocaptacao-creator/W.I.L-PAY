@@ -25,7 +25,7 @@ const privateResult = await resolveWilpayAttachmentViewer({
     assert.match(object_key, /^users\//);
     return {
       signed_url: 'https://storage.wilpay.example/private/file-123.jpg?signature=redacted',
-      expires_at: '2030-01-01T00:00:00.000Z'
+      expires_at: '2029-01-01T00:04:00.000Z'
     };
   },
   now: Date.parse('2029-01-01T00:00:00.000Z')
