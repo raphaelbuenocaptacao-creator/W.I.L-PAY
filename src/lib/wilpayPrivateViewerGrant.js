@@ -51,6 +51,16 @@ export async function resolveWilpayPrivateViewerSource({
 }
 
 export function stripEphemeralViewerFields(record = {}) {
-  const { signed_url, viewer_url, upload_url, url, ...metadataOnly } = record;
+  const {
+    signed_url,
+    viewer_url,
+    upload_url,
+    url,
+    data_url,
+    blob_url,
+    object_url,
+    preview_url,
+    ...metadataOnly
+  } = record;
   return metadataOnly;
 }
