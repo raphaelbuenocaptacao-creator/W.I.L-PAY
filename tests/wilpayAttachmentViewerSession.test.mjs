@@ -5,11 +5,12 @@ import {
 } from '../src/lib/wilpayAttachmentViewerSession.js';
 
 const now = Date.parse('2026-09-08T12:00:00.000Z');
-
-const legacy = await resolveWilpayAttachmentForCurrentSession({
+const legacyRecord = {
   data_url: 'data:image/jpeg;base64,AA==',
   mime_type: 'image/jpeg'
-}, { now });
+};
+
+const legacy = await resolveWilpayAttachmentForCurrentSession(legacyRecord, { now });
 assert.equal(legacy.mode, 'legacy');
 assert.match(legacy.source, /^data:image\/jpeg;base64,/);
 
@@ -37,15 +38,18 @@ assert.deepEqual(grantRequest, {
 assert.equal(privateResolved.file_id, privateRecord.file_id);
 
 let openedArgs = null;
-const opened = await openWilpayAttachmentForCurrentSession(legacy, {
+let openedWindow = null;
+const opened = await openWilpayAttachmentForCurrentSession(legacyRecord, {
   now,
   openWindow: (...args) => {
     openedArgs = args;
-    return { opener: 'unsafe' };
+    openedWindow = { opener: 'unsafe' };
+    return openedWindow;
   }
 });
 assert.equal(opened.mode, 'legacy');
 assert.equal(openedArgs[1], '_blank');
 assert.equal(openedArgs[2], 'noopener,noreferrer');
+assert.equal(openedWindow.opener, null);
 
 console.log('PASS wilpayAttachmentViewerSession');
