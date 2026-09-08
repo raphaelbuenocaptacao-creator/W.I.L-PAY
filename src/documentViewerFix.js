@@ -155,23 +155,31 @@ async function interceptViewerLinks(event) {
   openViewer(anchor.getAttribute('href'), fileNameFromAnchor(anchor), anchor.dataset.mimeType || '');
 }
 
+function markPrivateReceiptAnchor(anchor) {
+  anchor.dataset.wilPrivateReceipt = '1';
+  anchor.dataset.wilViewerReady = '1';
+  anchor.href = '#';
+  anchor.textContent = 'Visualizar comprovante';
+  anchor.removeAttribute('target');
+  anchor.removeAttribute('download');
+  anchor.setAttribute('aria-label', 'Visualizar comprovante da liberação');
+}
+
 function improveLinkLabels(root = document) {
   root.querySelectorAll?.('.released a:not([href])').forEach(anchor => {
     if (anchor.dataset.wilViewerReady) return;
-    anchor.dataset.wilPrivateReceipt = '1';
-    anchor.dataset.wilViewerReady = '1';
-    anchor.href = '#';
-    anchor.textContent = 'Visualizar comprovante';
-    anchor.removeAttribute('target');
-    anchor.setAttribute('aria-label', 'Visualizar comprovante da liberação');
+    markPrivateReceiptAnchor(anchor);
   });
 
   root.querySelectorAll?.('a[href^="data:"], a[data-wil-private-file="1"][href]').forEach(anchor => {
     if (!isWilpayViewerSource(anchor.getAttribute('href'), { privateFile: anchor.dataset.wilPrivateFile === '1' })) return;
     if (anchor.dataset.wilViewerReady) return;
+    if (anchor.closest('.released')) {
+      markPrivateReceiptAnchor(anchor);
+      return;
+    }
     anchor.dataset.wilViewerReady = '1';
-    if (anchor.closest('.released')) anchor.textContent = 'Visualizar comprovante';
-    else anchor.textContent = 'Visualizar documento';
+    anchor.textContent = 'Visualizar documento';
     anchor.removeAttribute('target');
   });
 }
