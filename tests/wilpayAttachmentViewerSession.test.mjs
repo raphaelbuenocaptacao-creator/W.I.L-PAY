@@ -16,6 +16,7 @@ assert.match(legacy.source, /^data:image\/jpeg;base64,/);
 
 let grantRequest = null;
 const privateRecord = {
+  record_type: 'ATTACHMENT',
   file_id: 'file_test_123',
   object_key: 'wilpay/users/u1/loans/l1/comprovante.jpg',
   mime_type: 'image/jpeg'
@@ -36,6 +37,24 @@ assert.deepEqual(grantRequest, {
   object_key: privateRecord.object_key
 });
 assert.equal(privateResolved.file_id, privateRecord.file_id);
+
+let invalidGrantCalled = false;
+await assert.rejects(
+  resolveWilpayAttachmentForCurrentSession({
+    record_type: 'LOAN',
+    file_id: 'file_must_not_open',
+    object_key: 'wilpay/users/u1/loans/l1/not-an-attachment',
+    mime_type: 'image/jpeg'
+  }, {
+    now,
+    requestViewerGrant: async () => {
+      invalidGrantCalled = true;
+      throw new Error('grant must not be requested');
+    }
+  }),
+  /record is not an attachment/
+);
+assert.equal(invalidGrantCalled, false);
 
 let openedArgs = null;
 let openedWindow = null;
