@@ -1,4 +1,5 @@
 import { persistWilpayAttachmentForRuntime } from './wilpayAttachmentRuntimeGateway.js';
+import { getWilpayAureonAccessToken } from './wilpayAureonAccessToken.js';
 
 function requiredText(value, label) {
   const text = String(value ?? '').trim();
@@ -27,7 +28,7 @@ function compactLegacyRecord({ authUid, loanId, docType, file, createdAt }) {
 
 export async function persistWilpayAppAttachment({
   neon,
-  getAccessToken,
+  getAccessToken = getWilpayAureonAccessToken,
   authUid,
   loanId,
   docType,
