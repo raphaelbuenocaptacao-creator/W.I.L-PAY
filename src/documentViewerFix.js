@@ -1,3 +1,5 @@
+import { neon } from './lib/aureonClient.js';
+import { resolveWilpayAttachmentForCurrentSession } from './lib/wilpayAttachmentViewerSession.js';
 import { isWilpayViewerSource, mimeFromViewerSource } from './lib/wilpayViewerSource.js';
 
 function fileNameFromAnchor(anchor) {
@@ -85,23 +87,85 @@ function openViewer(source, title, declaredMime = '') {
   close.focus();
 }
 
+async function resolveCurrentPayoutReceipt() {
+  const session = await neon.auth.getSession();
+  const user = session?.data?.user;
+  if (!user?.id) throw new Error('Sessão expirada. Entre novamente para visualizar o comprovante.');
+
+  const result = await neon.from('wilpay_loans')
+    .select('*')
+    .eq('auth_uid', user.id)
+    .order('created_at', { ascending: false });
+  if (result.error) throw new Error('Não foi possível localizar o comprovante.');
+
+  const rows = result.data || [];
+  const loans = rows
+    .filter(row => !row.record_type || row.record_type === 'LOAN')
+    .sort((a, b) => new Date(b.requested_at || b.created_at) - new Date(a.requested_at || a.created_at));
+  const current = loans[0];
+  if (!current) throw new Error('Nenhuma solicitação ativa foi localizada.');
+
+  const receipt = rows.find(row =>
+    row.record_type === 'ATTACHMENT' &&
+    String(row.loan_id) === String(current.id) &&
+    row.doc_type === 'COMPROVANTE_PAGAMENTO'
+  );
+  if (!receipt) throw new Error('Comprovante da liberação ainda não disponível.');
+
+  return resolveWilpayAttachmentForCurrentSession(receipt);
+}
+
 function viewerAnchorFromEvent(event) {
-  const anchor = event.target.closest?.('a[href]');
+  const anchor = event.target.closest?.('a');
   if (!anchor) return null;
+  if (anchor.dataset.wilPrivateReceipt === '1') return anchor;
+  if (!anchor.hasAttribute('href')) return null;
   const source = anchor.getAttribute('href');
   const privateFile = anchor.dataset.wilPrivateFile === '1';
   return isWilpayViewerSource(source, { privateFile }) ? anchor : null;
 }
 
-function interceptViewerLinks(event) {
+async function interceptViewerLinks(event) {
   const anchor = viewerAnchorFromEvent(event);
   if (!anchor) return;
   event.preventDefault();
   event.stopPropagation();
+
+  if (anchor.dataset.wilPrivateReceipt === '1') {
+    if (anchor.dataset.wilBusy === '1') return;
+    anchor.dataset.wilBusy = '1';
+    anchor.setAttribute('aria-busy', 'true');
+    const previousText = anchor.textContent;
+    anchor.textContent = 'Abrindo...';
+    try {
+      const resolved = await resolveCurrentPayoutReceipt();
+      openViewer(resolved.source, 'Comprovante da liberação', resolved.mime_type || '');
+    } catch (error) {
+      console.warn('W.I.L Pay private receipt viewer failed.', error);
+      anchor.textContent = error?.message || 'Não foi possível abrir o comprovante.';
+      setTimeout(() => { anchor.textContent = previousText; }, 3500);
+    } finally {
+      anchor.dataset.wilBusy = '0';
+      anchor.setAttribute('aria-busy', 'false');
+      if (anchor.textContent === 'Abrindo...') anchor.textContent = previousText;
+    }
+    return;
+  }
+
   openViewer(anchor.getAttribute('href'), fileNameFromAnchor(anchor), anchor.dataset.mimeType || '');
 }
 
 function improveLinkLabels(root = document) {
+  root.querySelectorAll?.('.released a:not([href])').forEach(anchor => {
+    if (anchor.dataset.wilViewerReady) return;
+    anchor.dataset.wilPrivateReceipt = '1';
+    anchor.dataset.wilViewerReady = '1';
+    anchor.href = '#';
+    anchor.textContent = 'Visualizar comprovante';
+    anchor.removeAttribute('target');
+    anchor.setAttribute('aria-label', 'Visualizar comprovante da liberação');
+  });
+
   root.querySelectorAll?.('a[href^="data:"], a[data-wil-private-file="1"][href]').forEach(anchor => {
     if (!isWilpayViewerSource(anchor.getAttribute('href'), { privateFile: anchor.dataset.wilPrivateFile === '1' })) return;
     if (anchor.dataset.wilViewerReady) return;
