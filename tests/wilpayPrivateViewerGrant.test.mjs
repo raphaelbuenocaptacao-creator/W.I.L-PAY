@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { resolveWilpayPrivateViewerSource, stripEphemeralViewerFields } from '../src/lib/wilpayPrivateViewerGrant.js';
+import { resolveWilpayPrivateViewerSource, stripEphemeralViewerFields, WILPAY_MAX_VIEWER_GRANT_TTL_MS } from '../src/lib/wilpayPrivateViewerGrant.js';
 
-const future = new Date(Date.now() + 60_000).toISOString();
+const now = Date.now();
+const future = new Date(now + 60_000).toISOString();
 const metadata = {
   file_id: 'file-123',
   object_key: 'wilpay/users/u1/loans/l1/document/file-123.pdf',
@@ -11,6 +12,7 @@ const metadata = {
 let requestPayload = null;
 const resolved = await resolveWilpayPrivateViewerSource({
   metadata,
+  now,
   requestViewerGrant: async (payload) => {
     requestPayload = payload;
     return {
@@ -27,16 +29,30 @@ assert.deepEqual(requestPayload, {
 assert.equal(resolved.file_id, metadata.file_id);
 assert.equal(resolved.mime_type, 'application/pdf');
 assert.match(resolved.source, /^https:\/\//);
+assert.equal(WILPAY_MAX_VIEWER_GRANT_TTL_MS, 5 * 60 * 1000);
 
 await assert.rejects(
   resolveWilpayPrivateViewerSource({
     metadata,
+    now,
     requestViewerGrant: async () => ({
       signed_url: 'https://storage.example.test/private/file-123.pdf',
-      expires_at: new Date(Date.now() - 1000).toISOString()
+      expires_at: new Date(now - 1000).toISOString()
     })
   }),
   /Expired or invalid private viewer grant/
+);
+
+await assert.rejects(
+  resolveWilpayPrivateViewerSource({
+    metadata,
+    now,
+    requestViewerGrant: async () => ({
+      signed_url: 'https://storage.example.test/private/file-123.pdf?sig=too-long',
+      expires_at: new Date(now + WILPAY_MAX_VIEWER_GRANT_TTL_MS + 1000).toISOString()
+    })
+  }),
+  /Private viewer grant lifetime exceeds policy/
 );
 
 assert.deepEqual(
