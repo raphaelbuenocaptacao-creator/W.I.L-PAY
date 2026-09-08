@@ -1,5 +1,7 @@
 import { isWilpayViewerSource, mimeFromViewerSource } from './wilpayViewerSource.js';
 
+export const WILPAY_MAX_VIEWER_GRANT_TTL_MS = 5 * 60 * 1000;
+
 function assertFunction(value, label) {
   if (typeof value !== 'function') throw new Error(`${label} is required`);
 }
@@ -35,6 +37,9 @@ export async function resolveWilpayPrivateViewerSource({
   if (!mimeType) throw new Error('Unsupported private viewer MIME type');
   if (!Number.isFinite(expiresAt) || expiresAt <= now) {
     throw new Error('Expired or invalid private viewer grant');
+  }
+  if (expiresAt - now > WILPAY_MAX_VIEWER_GRANT_TTL_MS) {
+    throw new Error('Private viewer grant lifetime exceeds policy');
   }
 
   return Object.freeze({
