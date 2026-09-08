@@ -62,6 +62,10 @@ assert.deepEqual(
     viewer_url: 'secret-temporary-url',
     upload_url: 'secret-temporary-url',
     url: 'secret-temporary-url',
+    data_url: 'data:application/pdf;base64,private-binary',
+    blob_url: 'blob:https://app.example.test/private',
+    object_url: 'blob:https://app.example.test/object',
+    preview_url: 'https://storage.example.test/private/preview?sig=temporary',
     checksum_sha256: 'abc'
   }),
   { ...metadata, checksum_sha256: 'abc' }
