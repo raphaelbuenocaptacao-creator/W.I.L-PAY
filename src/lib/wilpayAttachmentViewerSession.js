@@ -13,6 +13,11 @@ function assertAttachmentRecord(record) {
   if (record.record_type && record.record_type !== 'ATTACHMENT') {
     throw new Error('record is not an attachment');
   }
+  // Storage-backed rows must stay tenant-bound. Legacy data URLs remain readable
+  // during migration, but a private grant is never requested for orphan metadata.
+  if (isPrivateRecord(record) && !String(record.auth_uid || '').trim()) {
+    throw new Error('private attachment owner is required');
+  }
 }
 
 export async function resolveWilpayAttachmentForCurrentSession(
