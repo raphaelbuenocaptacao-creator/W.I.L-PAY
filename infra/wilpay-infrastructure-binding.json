@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "project": "wilpay",
+  "environment": "production",
+  "isolation": {
+    "exclusive": true,
+    "forbidden_shared_projects": ["captapro", "gamificacao"],
+    "database_provider": "neon",
+    "database_project_id": null,
+    "database_org_id": null,
+    "storage_bucket": "wilpay-private-documents",
+    "storage_private": true,
+    "storage_provider_binding": null
+  },
+  "capacity": {
+    "minimum_complete_clients": 1000
+  },
+  "data_policy": {
+    "database_binary_payloads": false,
+    "database_stores_metadata_only": true,
+    "private_storage_required_for_new_uploads_when_bound": true
+  },
+  "readiness": {
+    "status": "BLOCKED_EXTERNAL_BINDING",
+    "requires": [
+      "exclusive_neon_project_id",
+      "exclusive_neon_org_id",
+      "private_storage_provider_binding"
+    ]
+  }
+}
