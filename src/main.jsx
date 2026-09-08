@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './AppV4';
 import { neon } from './lib/aureonClient';
 import { installWilpayLegacyAttachmentWriteGuard } from './lib/wilpayLegacyAttachmentWriteGuard.js';
+import './realtimeAutoRefresh.js';
 import './styles.css';
 import './v2.css';
 import './enhancements.css';
@@ -16,7 +17,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>
 );
 
-const APP_VERSION = 'v36-whatsapp-share';
+const APP_VERSION = 'v37-live-sync';
 const isSecureContextForPwa = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
 if ('serviceWorker' in navigator && isSecureContextForPwa) {
   window.addEventListener('load', async () => {
