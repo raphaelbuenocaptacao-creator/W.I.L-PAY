@@ -3,18 +3,48 @@ const PROJECT = 'wilpay';
 const ACCESS = 'wilpay_aureon_access';
 const REFRESH = 'wilpay_aureon_refresh';
 
-let accessToken = localStorage.getItem(ACCESS) || '';
-let refreshToken = localStorage.getItem(REFRESH) || '';
+const browserStorage = () => (
+  typeof globalThis !== 'undefined' && globalThis.localStorage
+    ? globalThis.localStorage
+    : null
+);
+
+const readStoredToken = key => {
+  try {
+    return browserStorage()?.getItem(key) || '';
+  } catch {
+    return '';
+  }
+};
+
+const writeStoredToken = (key, value) => {
+  try {
+    browserStorage()?.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in privacy modes; keep the in-memory session usable.
+  }
+};
+
+const removeStoredToken = key => {
+  try {
+    browserStorage()?.removeItem(key);
+  } catch {
+    // Clearing the in-memory session is sufficient when browser storage is unavailable.
+  }
+};
+
+let accessToken = readStoredToken(ACCESS);
+let refreshToken = readStoredToken(REFRESH);
 let currentUser = null;
 
 function persist(data = {}) {
   if (data.access_token) {
     accessToken = data.access_token;
-    localStorage.setItem(ACCESS, accessToken);
+    writeStoredToken(ACCESS, accessToken);
   }
   if (data.refresh_token) {
     refreshToken = data.refresh_token;
-    localStorage.setItem(REFRESH, refreshToken);
+    writeStoredToken(REFRESH, refreshToken);
   }
 }
 
@@ -22,8 +52,8 @@ function clear() {
   accessToken = '';
   refreshToken = '';
   currentUser = null;
-  localStorage.removeItem(ACCESS);
-  localStorage.removeItem(REFRESH);
+  removeStoredToken(ACCESS);
+  removeStoredToken(REFRESH);
 }
 
 async function raw(path, options = {}, token = accessToken) {
