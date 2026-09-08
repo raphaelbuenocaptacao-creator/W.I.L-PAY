@@ -9,6 +9,11 @@ assert.match(source, /\.eq\('auth_uid', user\.id\)/);
 assert.match(source, /row\.record_type === 'ATTACHMENT'/);
 assert.match(source, /row\.doc_type === 'COMPROVANTE_PAGAMENTO'/);
 assert.match(source, /openViewer\(resolved\.source/);
+assert.match(source, /function markPrivateReceiptAnchor\(anchor\)/);
+assert.match(source, /anchor\.href = '#'/);
+assert.match(source, /if \(anchor\.closest\('\.released'\)\) \{\s*markPrivateReceiptAnchor\(anchor\)/);
+assert.match(source, /anchor\.removeAttribute\('target'\)/);
+assert.match(source, /anchor\.removeAttribute\('download'\)/);
 assert.doesNotMatch(source, /service_role|SERVICE_ROLE|secret[_-]?key/i);
 
 console.log('wilpay private receipt viewer bridge: PASS');
