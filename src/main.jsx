@@ -1,12 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './AppV3';
+import { neon } from './lib/aureonClient';
+import { installWilpayLegacyAttachmentWriteGuard } from './lib/wilpayLegacyAttachmentWriteGuard.js';
 import './styles.css';
 import './v2.css';
 import './enhancements.css';
 import './v3.css';
 import './documentViewerFix.css';
 import './documentViewerFix.js';
+
+installWilpayLegacyAttachmentWriteGuard(neon);
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>
