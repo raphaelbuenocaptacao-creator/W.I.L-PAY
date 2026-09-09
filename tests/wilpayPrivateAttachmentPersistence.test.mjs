@@ -66,7 +66,8 @@ assert.equal(inserted.doc_type, 'DOCUMENTO_FOTO');
 assert.equal(inserted.file_id, 'file_789');
 assert.equal(inserted.storage_provider, 'private');
 assert.equal(inserted.bucket, 'wilpay-private-documents');
-assert.match(inserted.object_key, /^wilpay\/users\/user_123\/loans\/loan_456\/document\/file_789\.jpg$/);
+assert.equal(inserted.object_key, 'wilpay/production/user_123/documents/file_789');
+assert.equal(inserted.object_key.includes('loan_456'), false, 'loan_id must stay in metadata, not the physical object key');
 assert.match(inserted.checksum_sha256, /^[a-f0-9]{64}$/);
 
 for (const forbidden of ['data_url', 'base64', 'file', 'blob', 'buffer', 'content', 'signed_url', 'upload_url']) {
