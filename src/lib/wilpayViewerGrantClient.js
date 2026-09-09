@@ -1,8 +1,11 @@
+import { WILPAY_VIEWER_MIME_TYPES } from './wilpayViewerSource.js';
+
 const HTTPS_PROTOCOL = 'https:';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 const PRODUCTION_PREFIX = 'wilpay/production/';
 const LEGACY_PREFIX = 'wilpay/users/';
 const PRODUCTION_CATEGORIES = new Set(['documents', 'selfies', 'receipts', 'guarantees', 'history']);
+const ALLOWED_VIEWER_MIME_TYPES = new Set(WILPAY_VIEWER_MIME_TYPES);
 const MAX_VIEWER_GRANT_TTL_MS = 5 * 60 * 1000;
 
 function requiredText(value, label) {
@@ -16,6 +19,16 @@ function safeSegment(value, label) {
   if (text.length > 128 || !/^[A-Za-z0-9_-]+$/.test(text) || text === '.' || text === '..') {
     throw new Error(`Invalid ${label}`);
   }
+  return text;
+}
+
+function normalizeViewerMime(value, label, { required = true } = {}) {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (!text) {
+    if (!required) return null;
+    throw new Error(`${label} is required`);
+  }
+  if (!ALLOWED_VIEWER_MIME_TYPES.has(text)) throw new Error(`${label} is not allowed`);
   return text;
 }
 
@@ -108,7 +121,7 @@ function parseSignedViewerUrl(value) {
   return url;
 }
 
-function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, now }) {
+function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expectedMimeType, now }) {
   if (grant.file_id != null && requiredText(grant.file_id, 'Viewer grant file_id') !== fileId) {
     throw new Error('Viewer grant file_id does not match request');
   }
@@ -120,6 +133,15 @@ function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, now }
   }
   if (grant.auth_uid != null && safeSegment(grant.auth_uid, 'Viewer grant auth_uid') !== ownerUserId) {
     throw new Error('Viewer grant auth_uid does not match request');
+  }
+
+  if (expectedMimeType) {
+    const returnedMimeType = normalizeViewerMime(grant.mime_type || grant.content_type, 'Viewer grant mime_type');
+    if (returnedMimeType !== expectedMimeType) {
+      throw new Error('Viewer grant mime_type does not match attachment metadata');
+    }
+  } else if (grant.mime_type != null || grant.content_type != null) {
+    normalizeViewerMime(grant.mime_type || grant.content_type, 'Viewer grant mime_type');
   }
 
   parseSignedViewerUrl(grant.url || grant.signed_url);
@@ -161,6 +183,10 @@ export function createWilpayViewerGrantRequester({
     const ownerUserId = safeSegment(metadata.owner_user_id || metadata.auth_uid, 'owner_user_id');
     const objectKey = requiredText(metadata.object_key, 'object_key');
     assertViewerObjectScope({ fileId, objectKey, ownerUserId });
+    const isProductionObject = objectKey.startsWith(PRODUCTION_PREFIX);
+    const expectedMimeType = normalizeViewerMime(metadata.mime_type || metadata.content_type, 'attachment mime_type', {
+      required: isProductionObject
+    });
     const context = auditContext(objectKey);
     safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
     const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
@@ -190,7 +216,13 @@ export function createWilpayViewerGrantRequester({
     }
     const grant = await response.json();
     if (!grant || typeof grant !== 'object') throw new Error('Viewer grant response is invalid');
-    const scopedGrant = assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, now: Date.now() });
+    const scopedGrant = assertReturnedGrantScope(grant, {
+      fileId,
+      objectKey,
+      ownerUserId,
+      expectedMimeType,
+      now: Date.now()
+    });
     safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
     return scopedGrant;
   };
