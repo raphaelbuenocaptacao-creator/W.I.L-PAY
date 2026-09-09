@@ -11,6 +11,7 @@ function assertPrivateFileMetadata(metadata) {
   if (!metadata.file_id) throw new Error('metadata.file_id is required');
   if (!metadata.object_key) throw new Error('metadata.object_key is required');
   if (!metadata.mime_type) throw new Error('metadata.mime_type is required');
+  if (!metadata.auth_uid) throw new Error('metadata.auth_uid is required');
   return metadata;
 }
 
@@ -24,7 +25,8 @@ export async function resolveWilpayPrivateViewerSource({
 
   const grant = await requestViewerGrant({
     file_id: safeMetadata.file_id,
-    object_key: safeMetadata.object_key
+    object_key: safeMetadata.object_key,
+    owner_user_id: safeMetadata.auth_uid
   });
 
   const url = String(grant?.url || grant?.signed_url || '').trim();
