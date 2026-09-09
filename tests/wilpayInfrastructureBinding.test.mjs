@@ -5,7 +5,7 @@ const raw = await readFile(new URL('../infra/wilpay-infrastructure-binding.json'
 const binding = JSON.parse(raw);
 const normalized = raw.toLowerCase();
 
-assert.equal(binding.schema_version >= 2, true);
+assert.equal(binding.schema_version >= 3, true);
 assert.equal(binding.project, 'wilpay');
 assert.equal(binding.environment, 'production');
 assert.equal(binding.isolation.exclusive, true);
@@ -16,6 +16,18 @@ assert.equal(binding.capacity.minimum_complete_clients >= 1000, true);
 assert.equal(binding.data_policy.database_binary_payloads, false);
 assert.equal(binding.data_policy.database_stores_metadata_only, true);
 assert.equal(binding.data_policy.private_storage_required_for_new_uploads_when_bound, true);
+
+const layout = binding.isolation.storage_layout;
+assert.equal(layout.root_prefix, 'wilpay/production');
+assert.equal(layout.object_key_template, 'wilpay/production/{auth_uid}/{category}/{file_id}');
+assert.equal(layout.immutable_file_id_required, true);
+assert.equal(layout.pii_in_object_key_forbidden, true);
+for (const category of ['documents', 'selfies', 'receipts', 'guarantees', 'history']) {
+  assert.equal(layout.allowed_categories.includes(category), true, `missing storage category: ${category}`);
+}
+for (const forbiddenToken of ['{name}', '{email}', '{cpf}', '{phone}', '{document_number}']) {
+  assert.equal(layout.object_key_template.includes(forbiddenToken), false, `object key must not contain PII token: ${forbiddenToken}`);
+}
 
 for (const forbidden of ['captapro', 'gamificacao']) {
   assert.equal(binding.isolation.forbidden_shared_projects.includes(forbidden), true);
