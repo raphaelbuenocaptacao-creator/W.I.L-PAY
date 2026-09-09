@@ -3,6 +3,7 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 const PRODUCTION_PREFIX = 'wilpay/production/';
 const LEGACY_PREFIX = 'wilpay/users/';
 const PRODUCTION_CATEGORIES = new Set(['documents', 'selfies', 'receipts', 'guarantees', 'history']);
+const MAX_VIEWER_GRANT_TTL_MS = 5 * 60 * 1000;
 
 function requiredText(value, label) {
   const text = String(value ?? '').trim();
@@ -91,7 +92,23 @@ function parseViewerGrantEndpoint(value) {
   return url;
 }
 
-function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId }) {
+function parseSignedViewerUrl(value) {
+  let url;
+  try {
+    url = new URL(requiredText(value, 'Viewer grant signed URL'));
+  } catch {
+    throw new Error('Viewer grant signed URL is invalid');
+  }
+  if (url.username || url.password || url.hash) {
+    throw new Error('Viewer grant signed URL is invalid');
+  }
+  if (url.protocol !== HTTPS_PROTOCOL && !(url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname))) {
+    throw new Error('Viewer grant signed URL must use HTTPS');
+  }
+  return url;
+}
+
+function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, now }) {
   if (grant.file_id != null && requiredText(grant.file_id, 'Viewer grant file_id') !== fileId) {
     throw new Error('Viewer grant file_id does not match request');
   }
@@ -103,6 +120,15 @@ function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId }) {
   }
   if (grant.auth_uid != null && safeSegment(grant.auth_uid, 'Viewer grant auth_uid') !== ownerUserId) {
     throw new Error('Viewer grant auth_uid does not match request');
+  }
+
+  parseSignedViewerUrl(grant.url || grant.signed_url);
+  const expiresAt = Date.parse(requiredText(grant.expires_at, 'Viewer grant expires_at'));
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+    throw new Error('Viewer grant is expired or has invalid expires_at');
+  }
+  if (expiresAt - now > MAX_VIEWER_GRANT_TTL_MS) {
+    throw new Error('Viewer grant lifetime exceeds policy');
   }
   return grant;
 }
@@ -164,7 +190,7 @@ export function createWilpayViewerGrantRequester({
     }
     const grant = await response.json();
     if (!grant || typeof grant !== 'object') throw new Error('Viewer grant response is invalid');
-    const scopedGrant = assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId });
+    const scopedGrant = assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, now: Date.now() });
     safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
     return scopedGrant;
   };
