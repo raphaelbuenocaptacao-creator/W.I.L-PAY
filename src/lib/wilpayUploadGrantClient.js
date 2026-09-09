@@ -25,6 +25,12 @@ function safeId(value, label) {
   return text;
 }
 
+function defaultRequestId() {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (typeof randomUUID !== 'function') throw new Error('Secure request id generator is unavailable');
+  return randomUUID.call(globalThis.crypto);
+}
+
 function safeAudit(onAudit, event) {
   if (typeof onAudit !== 'function') return;
   try {
@@ -96,9 +102,12 @@ function assertGrantUploadUrl(value) {
   return true;
 }
 
-function assertWilpayUploadGrantResponse(grant, payload) {
+function assertWilpayUploadGrantResponse(grant, payload, requestId) {
   if (!grant || typeof grant !== 'object' || Array.isArray(grant)) {
     throw new Error('Upload grant response is invalid');
+  }
+  if (grant.request_id != null && safeId(grant.request_id, 'upload grant request_id') !== requestId) {
+    throw new Error('Upload grant response request_id mismatch');
   }
   if (grant.method !== 'PUT') throw new Error('Upload grant response must use PUT');
   if (grant.bucket !== payload.bucket) throw new Error('Upload grant response bucket mismatch');
@@ -147,27 +156,32 @@ export function createWilpayUploadGrantRequester({
   endpoint = configuredWilpayUploadGrantEndpoint(),
   getAccessToken,
   fetchImpl = fetch,
-  onAudit
+  onAudit,
+  createRequestId = defaultRequestId
 } = {}) {
   const url = parseGrantEndpoint(endpoint);
   if (typeof getAccessToken !== 'function') throw new Error('getAccessToken is required');
   if (typeof fetchImpl !== 'function') throw new Error('fetchImpl is required');
   if (onAudit != null && typeof onAudit !== 'function') throw new Error('onAudit must be a function');
+  if (typeof createRequestId !== 'function') throw new Error('createRequestId must be a function');
 
   return async function requestWilpayUploadGrant(payload) {
     assertWilpayUploadGrantPayload(payload);
     const context = auditContext(payload);
     safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
 
+    const requestId = safeId(await createRequestId(), 'upload request_id');
     const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
+    const requestPayload = Object.freeze({ ...payload, request_id: requestId });
     const response = await fetchImpl(url.toString(), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-WILPay-Request-ID': requestId
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
       credentials: 'omit',
       cache: 'no-store',
       redirect: 'error',
@@ -185,7 +199,7 @@ export function createWilpayUploadGrantRequester({
     }
 
     const grant = await response.json();
-    const ttlMs = assertWilpayUploadGrantResponse(grant, payload);
+    const ttlMs = assertWilpayUploadGrantResponse(grant, payload, requestId);
     safeAudit(onAudit, {
       phase: 'response',
       outcome: 'issued',
