@@ -41,10 +41,7 @@ function defaultRequestId() {
 function safeAudit(onAudit, event) {
   if (typeof onAudit !== 'function') return;
   try {
-    onAudit(Object.freeze({
-      event: 'wilpay.storage.viewer_grant',
-      ...event
-    }));
+    onAudit(Object.freeze({ event: 'wilpay.storage.viewer_grant', ...event }));
   } catch {
     // Audit sinks are observational only; never expose or retry sensitive viewer data here.
   }
@@ -65,23 +62,17 @@ function assertViewerObjectScope({ fileId, objectKey, ownerUserId }) {
 
   if (objectKey.startsWith(PRODUCTION_PREFIX)) {
     const parts = objectKey.split('/');
-    if (parts.length !== 5 || parts[0] !== 'wilpay' || parts[1] !== 'production') {
-      throw new Error('Viewer object_key is outside W.I.L Pay private scope');
-    }
+    if (parts.length !== 5 || parts[0] !== 'wilpay' || parts[1] !== 'production') throw new Error('Viewer object_key is outside W.I.L Pay private scope');
     const objectOwner = safeSegment(parts[2], 'viewer owner');
     if (objectOwner !== ownerUserId) throw new Error('Viewer object_key owner does not match attachment owner');
     if (!PRODUCTION_CATEGORIES.has(parts[3])) throw new Error('Viewer object_key category is invalid');
-    if (safeSegment(parts[4], 'viewer file_id') !== fileId) {
-      throw new Error('Viewer object_key does not match file_id');
-    }
+    if (safeSegment(parts[4], 'viewer file_id') !== fileId) throw new Error('Viewer object_key does not match file_id');
     return true;
   }
 
   if (objectKey.startsWith(LEGACY_PREFIX)) {
     const parts = objectKey.split('/');
-    if (parts.length !== 7 || parts[0] !== 'wilpay' || parts[1] !== 'users' || parts[3] !== 'loans') {
-      throw new Error('Viewer legacy object_key is outside W.I.L Pay private scope');
-    }
+    if (parts.length !== 7 || parts[0] !== 'wilpay' || parts[1] !== 'users' || parts[3] !== 'loans') throw new Error('Viewer legacy object_key is outside W.I.L Pay private scope');
     const objectOwner = safeSegment(parts[2], 'viewer legacy owner');
     if (objectOwner !== ownerUserId) throw new Error('Viewer legacy object_key owner does not match attachment owner');
     safeSegment(parts[4], 'viewer legacy loan');
@@ -97,74 +88,41 @@ function assertViewerObjectScope({ fileId, objectKey, ownerUserId }) {
 
 function parseViewerGrantEndpoint(value) {
   let url;
-  try {
-    url = new URL(requiredText(value, 'W.I.L Pay viewer grant endpoint'));
-  } catch {
-    throw new Error('Invalid W.I.L Pay viewer grant endpoint');
-  }
-  if (url.username || url.password || url.hash) {
-    throw new Error('Invalid W.I.L Pay viewer grant endpoint');
-  }
-  if (url.protocol !== HTTPS_PROTOCOL && !LOCAL_HOSTS.has(url.hostname)) {
-    throw new Error('W.I.L Pay viewer grant endpoint must use HTTPS');
-  }
+  try { url = new URL(requiredText(value, 'W.I.L Pay viewer grant endpoint')); }
+  catch { throw new Error('Invalid W.I.L Pay viewer grant endpoint'); }
+  if (url.username || url.password || url.hash) throw new Error('Invalid W.I.L Pay viewer grant endpoint');
+  if (url.protocol !== HTTPS_PROTOCOL && !LOCAL_HOSTS.has(url.hostname)) throw new Error('W.I.L Pay viewer grant endpoint must use HTTPS');
   return url;
 }
 
 function parseSignedViewerUrl(value) {
   let url;
-  try {
-    url = new URL(requiredText(value, 'Viewer grant signed URL'));
-  } catch {
-    throw new Error('Viewer grant signed URL is invalid');
-  }
-  if (url.username || url.password || url.hash) {
-    throw new Error('Viewer grant signed URL is invalid');
-  }
-  if (url.protocol !== HTTPS_PROTOCOL && !(url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname))) {
-    throw new Error('Viewer grant signed URL must use HTTPS');
-  }
+  try { url = new URL(requiredText(value, 'Viewer grant signed URL')); }
+  catch { throw new Error('Viewer grant signed URL is invalid'); }
+  if (url.username || url.password || url.hash) throw new Error('Viewer grant signed URL is invalid');
+  if (url.protocol !== HTTPS_PROTOCOL && !(url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname))) throw new Error('Viewer grant signed URL must use HTTPS');
   return url;
 }
 
 function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expectedMimeType, requestId, requireRequestId, now }) {
-  if (grant.file_id != null && requiredText(grant.file_id, 'Viewer grant file_id') !== fileId) {
-    throw new Error('Viewer grant file_id does not match request');
-  }
-  if (grant.object_key != null && requiredText(grant.object_key, 'Viewer grant object_key') !== objectKey) {
-    throw new Error('Viewer grant object_key does not match request');
-  }
-  if (grant.owner_user_id != null && safeSegment(grant.owner_user_id, 'Viewer grant owner_user_id') !== ownerUserId) {
-    throw new Error('Viewer grant owner_user_id does not match request');
-  }
-  if (grant.auth_uid != null && safeSegment(grant.auth_uid, 'Viewer grant auth_uid') !== ownerUserId) {
-    throw new Error('Viewer grant auth_uid does not match request');
-  }
-  if (grant.request_id != null) {
-    if (safeSegment(grant.request_id, 'Viewer grant request_id') !== requestId) {
-      throw new Error('Viewer grant request_id does not match request');
-    }
-  } else if (requireRequestId) {
-    throw new Error('Viewer grant request_id is required for production objects');
-  }
+  if (grant.file_id != null && requiredText(grant.file_id, 'Viewer grant file_id') !== fileId) throw new Error('Viewer grant file_id does not match request');
+  if (grant.object_key != null && requiredText(grant.object_key, 'Viewer grant object_key') !== objectKey) throw new Error('Viewer grant object_key does not match request');
+  if (grant.owner_user_id != null && safeSegment(grant.owner_user_id, 'Viewer grant owner_user_id') !== ownerUserId) throw new Error('Viewer grant owner_user_id does not match request');
+  if (grant.auth_uid != null && safeSegment(grant.auth_uid, 'Viewer grant auth_uid') !== ownerUserId) throw new Error('Viewer grant auth_uid does not match request');
+  if (grant.request_id != null && safeSegment(grant.request_id, 'Viewer grant request_id') !== requestId) throw new Error('Viewer grant request_id does not match request');
 
   if (expectedMimeType) {
     const returnedMimeType = normalizeViewerMime(grant.mime_type || grant.content_type, 'Viewer grant mime_type');
-    if (returnedMimeType !== expectedMimeType) {
-      throw new Error('Viewer grant mime_type does not match attachment metadata');
-    }
+    if (returnedMimeType !== expectedMimeType) throw new Error('Viewer grant mime_type does not match attachment metadata');
   } else if (grant.mime_type != null || grant.content_type != null) {
     normalizeViewerMime(grant.mime_type || grant.content_type, 'Viewer grant mime_type');
   }
 
   parseSignedViewerUrl(grant.url || grant.signed_url);
   const expiresAt = Date.parse(requiredText(grant.expires_at, 'Viewer grant expires_at'));
-  if (!Number.isFinite(expiresAt) || expiresAt <= now) {
-    throw new Error('Viewer grant is expired or has invalid expires_at');
-  }
-  if (expiresAt - now > MAX_VIEWER_GRANT_TTL_MS) {
-    throw new Error('Viewer grant lifetime exceeds policy');
-  }
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) throw new Error('Viewer grant is expired or has invalid expires_at');
+  if (expiresAt - now > MAX_VIEWER_GRANT_TTL_MS) throw new Error('Viewer grant lifetime exceeds policy');
+  if (requireRequestId && grant.request_id == null) throw new Error('Viewer grant request_id is required for production objects');
   return grant;
 }
 
@@ -183,13 +141,7 @@ export function isWilpayPrivateViewerConfigured() {
   return true;
 }
 
-export function createWilpayViewerGrantRequester({
-  endpoint = configuredWilpayViewerGrantEndpoint(),
-  getAccessToken,
-  fetchImpl = fetch,
-  onAudit,
-  createRequestId = defaultRequestId
-} = {}) {
+export function createWilpayViewerGrantRequester({ endpoint = configuredWilpayViewerGrantEndpoint(), getAccessToken, fetchImpl = fetch, onAudit, createRequestId = defaultRequestId } = {}) {
   const url = parseViewerGrantEndpoint(endpoint);
   if (typeof getAccessToken !== 'function') throw new Error('getAccessToken is required');
   if (typeof fetchImpl !== 'function') throw new Error('fetchImpl is required');
@@ -204,9 +156,7 @@ export function createWilpayViewerGrantRequester({
     const objectKey = requiredText(metadata.object_key, 'object_key');
     assertViewerObjectScope({ fileId, objectKey, ownerUserId });
     const isProductionObject = objectKey.startsWith(PRODUCTION_PREFIX);
-    const expectedMimeType = normalizeViewerMime(metadata.mime_type || metadata.content_type, 'attachment mime_type', {
-      required: isProductionObject
-    });
+    const expectedMimeType = normalizeViewerMime(metadata.mime_type || metadata.content_type, 'attachment mime_type', { required: isProductionObject });
     const requestKey = grantRequestKey({ fileId, objectKey, ownerUserId, expectedMimeType });
     const pending = inFlight.get(requestKey);
     if (pending) {
@@ -219,7 +169,6 @@ export function createWilpayViewerGrantRequester({
       safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
       const requestId = safeSegment(await createRequestId(), 'viewer request_id');
       const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
-
       const response = await fetchImpl(url.toString(), {
         method: 'POST',
         headers: {
@@ -228,13 +177,7 @@ export function createWilpayViewerGrantRequester({
           'Accept': 'application/json',
           'X-WILPay-Request-ID': requestId
         },
-        body: JSON.stringify({
-          file_id: fileId,
-          object_key: objectKey,
-          owner_user_id: ownerUserId,
-          ...(expectedMimeType ? { mime_type: expectedMimeType } : {}),
-          request_id: requestId
-        }),
+        body: JSON.stringify({ file_id: fileId, object_key: objectKey, owner_user_id: ownerUserId, ...(expectedMimeType ? { mime_type: expectedMimeType } : {}), request_id: requestId }),
         credentials: 'omit',
         cache: 'no-store',
         redirect: 'error',
@@ -242,34 +185,18 @@ export function createWilpayViewerGrantRequester({
       });
 
       if (!response?.ok) {
-        safeAudit(onAudit, {
-          phase: 'response',
-          outcome: 'rejected',
-          http_status: Number.isInteger(response?.status) ? response.status : null,
-          ...context
-        });
+        safeAudit(onAudit, { phase: 'response', outcome: 'rejected', http_status: Number.isInteger(response?.status) ? response.status : null, ...context });
         throw new Error(`Viewer grant request failed (${response?.status ?? 'unknown'})`);
       }
       const grant = await response.json();
       if (!grant || typeof grant !== 'object') throw new Error('Viewer grant response is invalid');
-      const scopedGrant = assertReturnedGrantScope(grant, {
-        fileId,
-        objectKey,
-        ownerUserId,
-        expectedMimeType,
-        requestId,
-        requireRequestId: isProductionObject,
-        now: Date.now()
-      });
+      const scopedGrant = assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expectedMimeType, requestId, requireRequestId: isProductionObject, now: Date.now() });
       safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
       return scopedGrant;
     })();
 
     inFlight.set(requestKey, operation);
-    try {
-      return await operation;
-    } finally {
-      if (inFlight.get(requestKey) === operation) inFlight.delete(requestKey);
-    }
+    try { return await operation; }
+    finally { if (inFlight.get(requestKey) === operation) inFlight.delete(requestKey); }
   };
 }
