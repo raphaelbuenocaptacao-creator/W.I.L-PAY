@@ -198,7 +198,12 @@ export function createWilpayViewerGrantRequester({
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ file_id: fileId, object_key: objectKey, owner_user_id: ownerUserId }),
+      body: JSON.stringify({
+        file_id: fileId,
+        object_key: objectKey,
+        owner_user_id: ownerUserId,
+        ...(expectedMimeType ? { mime_type: expectedMimeType } : {})
+      }),
       credentials: 'omit',
       cache: 'no-store',
       redirect: 'error',
