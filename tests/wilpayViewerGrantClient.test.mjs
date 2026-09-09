@@ -8,10 +8,12 @@ async function run() {
   );
 
   let seen;
+  const audit = [];
   const productionKey = 'wilpay/production/user_1/documents/file-123';
   const request = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    onAudit: event => audit.push(event),
     fetchImpl: async (url, options) => {
       seen = { url, options };
       return {
@@ -46,6 +48,39 @@ async function run() {
     owner_user_id: 'user_1'
   });
   assert.ok(!seen.options.body.includes('session-token'));
+
+  assert.deepEqual(audit, [
+    {
+      event: 'wilpay.storage.viewer_grant',
+      phase: 'request',
+      outcome: 'accepted',
+      namespace: 'production',
+      category: 'documents'
+    },
+    {
+      event: 'wilpay.storage.viewer_grant',
+      phase: 'response',
+      outcome: 'issued',
+      namespace: 'production',
+      category: 'documents'
+    }
+  ]);
+  const serializedAudit = JSON.stringify(audit);
+  for (const sensitive of [
+    'session-token',
+    'user_1',
+    'file-123',
+    productionKey,
+    'private-storage.example',
+    'signature=temporary',
+    'signed_url',
+    'object_key',
+    'owner_user_id',
+    'auth_uid',
+    'file_id'
+  ]) {
+    assert.equal(serializedAudit.includes(sensitive), false, `audit leaked ${sensitive}`);
+  }
 
   let outOfScopeCalls = 0;
   const failClosed = createWilpayViewerGrantRequester({
@@ -136,15 +171,21 @@ async function run() {
     /file_id is required/
   );
 
+  const deniedAudit = [];
   const denied = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    onAudit: event => deniedAudit.push(event),
     fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) })
   });
   await assert.rejects(
     () => denied({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
     /Viewer grant request failed \(403\)/
   );
+  assert.equal(deniedAudit.at(-1)?.outcome, 'rejected');
+  assert.equal(deniedAudit.at(-1)?.http_status, 403);
+  assert.equal(JSON.stringify(deniedAudit).includes('session-token'), false);
+  assert.equal(JSON.stringify(deniedAudit).includes(productionKey), false);
 
   console.log('wilpayViewerGrantClient PASS');
 }
