@@ -32,6 +32,12 @@ function normalizeViewerMime(value, label, { required = true } = {}) {
   return text;
 }
 
+function defaultRequestId() {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (typeof randomUUID !== 'function') throw new Error('Secure request id generator is unavailable');
+  return randomUUID.call(globalThis.crypto);
+}
+
 function safeAudit(onAudit, event) {
   if (typeof onAudit !== 'function') return;
   try {
@@ -121,7 +127,7 @@ function parseSignedViewerUrl(value) {
   return url;
 }
 
-function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expectedMimeType, now }) {
+function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expectedMimeType, requestId, now }) {
   if (grant.file_id != null && requiredText(grant.file_id, 'Viewer grant file_id') !== fileId) {
     throw new Error('Viewer grant file_id does not match request');
   }
@@ -133,6 +139,9 @@ function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expec
   }
   if (grant.auth_uid != null && safeSegment(grant.auth_uid, 'Viewer grant auth_uid') !== ownerUserId) {
     throw new Error('Viewer grant auth_uid does not match request');
+  }
+  if (grant.request_id != null && safeSegment(grant.request_id, 'Viewer grant request_id') !== requestId) {
+    throw new Error('Viewer grant request_id does not match request');
   }
 
   if (expectedMimeType) {
@@ -174,12 +183,14 @@ export function createWilpayViewerGrantRequester({
   endpoint = configuredWilpayViewerGrantEndpoint(),
   getAccessToken,
   fetchImpl = fetch,
-  onAudit
+  onAudit,
+  createRequestId = defaultRequestId
 } = {}) {
   const url = parseViewerGrantEndpoint(endpoint);
   if (typeof getAccessToken !== 'function') throw new Error('getAccessToken is required');
   if (typeof fetchImpl !== 'function') throw new Error('fetchImpl is required');
   if (onAudit != null && typeof onAudit !== 'function') throw new Error('onAudit must be a function');
+  if (typeof createRequestId !== 'function') throw new Error('createRequestId must be a function');
   const inFlight = new Map();
 
   return async function requestWilpayViewerGrant(metadata) {
@@ -202,6 +213,7 @@ export function createWilpayViewerGrantRequester({
     const operation = (async () => {
       const context = auditContext(objectKey);
       safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
+      const requestId = safeSegment(await createRequestId(), 'viewer request_id');
       const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
 
       const response = await fetchImpl(url.toString(), {
@@ -209,13 +221,15 @@ export function createWilpayViewerGrantRequester({
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'X-WILPay-Request-ID': requestId
         },
         body: JSON.stringify({
           file_id: fileId,
           object_key: objectKey,
           owner_user_id: ownerUserId,
-          ...(expectedMimeType ? { mime_type: expectedMimeType } : {})
+          ...(expectedMimeType ? { mime_type: expectedMimeType } : {}),
+          request_id: requestId
         }),
         credentials: 'omit',
         cache: 'no-store',
@@ -239,6 +253,7 @@ export function createWilpayViewerGrantRequester({
         objectKey,
         ownerUserId,
         expectedMimeType,
+        requestId,
         now: Date.now()
       });
       safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
