@@ -18,6 +18,26 @@ function safeSegment(value, label) {
   return text;
 }
 
+function safeAudit(onAudit, event) {
+  if (typeof onAudit !== 'function') return;
+  try {
+    onAudit(Object.freeze({
+      event: 'wilpay.storage.viewer_grant',
+      ...event
+    }));
+  } catch {
+    // Audit sinks are observational only; never expose or retry sensitive viewer data here.
+  }
+}
+
+function auditContext(objectKey) {
+  if (objectKey.startsWith(PRODUCTION_PREFIX)) {
+    const parts = objectKey.split('/');
+    return Object.freeze({ namespace: 'production', category: parts[3] });
+  }
+  return Object.freeze({ namespace: 'legacy', category: 'legacy' });
+}
+
 function assertViewerObjectScope({ fileId, objectKey, ownerUserId }) {
   if (objectKey.includes('\\') || objectKey.includes('//') || objectKey.split('/').some(part => part === '.' || part === '..')) {
     throw new Error('Viewer object_key is outside W.I.L Pay private scope');
@@ -101,11 +121,13 @@ export function isWilpayPrivateViewerConfigured() {
 export function createWilpayViewerGrantRequester({
   endpoint = configuredWilpayViewerGrantEndpoint(),
   getAccessToken,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  onAudit
 } = {}) {
   const url = parseViewerGrantEndpoint(endpoint);
   if (typeof getAccessToken !== 'function') throw new Error('getAccessToken is required');
   if (typeof fetchImpl !== 'function') throw new Error('fetchImpl is required');
+  if (onAudit != null && typeof onAudit !== 'function') throw new Error('onAudit must be a function');
 
   return async function requestWilpayViewerGrant(metadata) {
     if (!metadata || typeof metadata !== 'object') throw new Error('Viewer grant metadata is required');
@@ -113,6 +135,8 @@ export function createWilpayViewerGrantRequester({
     const ownerUserId = safeSegment(metadata.owner_user_id || metadata.auth_uid, 'owner_user_id');
     const objectKey = requiredText(metadata.object_key, 'object_key');
     assertViewerObjectScope({ fileId, objectKey, ownerUserId });
+    const context = auditContext(objectKey);
+    safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
     const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
 
     const response = await fetchImpl(url.toString(), {
@@ -129,9 +153,19 @@ export function createWilpayViewerGrantRequester({
       referrerPolicy: 'no-referrer'
     });
 
-    if (!response?.ok) throw new Error(`Viewer grant request failed (${response?.status ?? 'unknown'})`);
+    if (!response?.ok) {
+      safeAudit(onAudit, {
+        phase: 'response',
+        outcome: 'rejected',
+        http_status: Number.isInteger(response?.status) ? response.status : null,
+        ...context
+      });
+      throw new Error(`Viewer grant request failed (${response?.status ?? 'unknown'})`);
+    }
     const grant = await response.json();
     if (!grant || typeof grant !== 'object') throw new Error('Viewer grant response is invalid');
-    return assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId });
+    const scopedGrant = assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId });
+    safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
+    return scopedGrant;
   };
 }
