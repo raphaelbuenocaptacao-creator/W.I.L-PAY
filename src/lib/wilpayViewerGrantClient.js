@@ -155,6 +155,10 @@ function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expec
   return grant;
 }
 
+function grantRequestKey({ fileId, objectKey, ownerUserId, expectedMimeType }) {
+  return JSON.stringify([ownerUserId, fileId, objectKey, expectedMimeType || null]);
+}
+
 export function configuredWilpayViewerGrantEndpoint() {
   return String(import.meta.env?.VITE_WILPAY_VIEWER_GRANT_ENDPOINT || '').trim() || null;
 }
@@ -176,6 +180,7 @@ export function createWilpayViewerGrantRequester({
   if (typeof getAccessToken !== 'function') throw new Error('getAccessToken is required');
   if (typeof fetchImpl !== 'function') throw new Error('fetchImpl is required');
   if (onAudit != null && typeof onAudit !== 'function') throw new Error('onAudit must be a function');
+  const inFlight = new Map();
 
   return async function requestWilpayViewerGrant(metadata) {
     if (!metadata || typeof metadata !== 'object') throw new Error('Viewer grant metadata is required');
@@ -187,48 +192,64 @@ export function createWilpayViewerGrantRequester({
     const expectedMimeType = normalizeViewerMime(metadata.mime_type || metadata.content_type, 'attachment mime_type', {
       required: isProductionObject
     });
-    const context = auditContext(objectKey);
-    safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
-    const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
-
-    const response = await fetchImpl(url.toString(), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        file_id: fileId,
-        object_key: objectKey,
-        owner_user_id: ownerUserId,
-        ...(expectedMimeType ? { mime_type: expectedMimeType } : {})
-      }),
-      credentials: 'omit',
-      cache: 'no-store',
-      redirect: 'error',
-      referrerPolicy: 'no-referrer'
-    });
-
-    if (!response?.ok) {
-      safeAudit(onAudit, {
-        phase: 'response',
-        outcome: 'rejected',
-        http_status: Number.isInteger(response?.status) ? response.status : null,
-        ...context
-      });
-      throw new Error(`Viewer grant request failed (${response?.status ?? 'unknown'})`);
+    const requestKey = grantRequestKey({ fileId, objectKey, ownerUserId, expectedMimeType });
+    const pending = inFlight.get(requestKey);
+    if (pending) {
+      safeAudit(onAudit, { phase: 'request', outcome: 'coalesced', ...auditContext(objectKey) });
+      return pending;
     }
-    const grant = await response.json();
-    if (!grant || typeof grant !== 'object') throw new Error('Viewer grant response is invalid');
-    const scopedGrant = assertReturnedGrantScope(grant, {
-      fileId,
-      objectKey,
-      ownerUserId,
-      expectedMimeType,
-      now: Date.now()
-    });
-    safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
-    return scopedGrant;
+
+    const operation = (async () => {
+      const context = auditContext(objectKey);
+      safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
+      const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
+
+      const response = await fetchImpl(url.toString(), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          file_id: fileId,
+          object_key: objectKey,
+          owner_user_id: ownerUserId,
+          ...(expectedMimeType ? { mime_type: expectedMimeType } : {})
+        }),
+        credentials: 'omit',
+        cache: 'no-store',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer'
+      });
+
+      if (!response?.ok) {
+        safeAudit(onAudit, {
+          phase: 'response',
+          outcome: 'rejected',
+          http_status: Number.isInteger(response?.status) ? response.status : null,
+          ...context
+        });
+        throw new Error(`Viewer grant request failed (${response?.status ?? 'unknown'})`);
+      }
+      const grant = await response.json();
+      if (!grant || typeof grant !== 'object') throw new Error('Viewer grant response is invalid');
+      const scopedGrant = assertReturnedGrantScope(grant, {
+        fileId,
+        objectKey,
+        ownerUserId,
+        expectedMimeType,
+        now: Date.now()
+      });
+      safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
+      return scopedGrant;
+    })();
+
+    inFlight.set(requestKey, operation);
+    try {
+      return await operation;
+    } finally {
+      if (inFlight.get(requestKey) === operation) inFlight.delete(requestKey);
+    }
   };
 }
