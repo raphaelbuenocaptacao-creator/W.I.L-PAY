@@ -187,6 +187,43 @@ async function run() {
   assert.equal(JSON.stringify(deniedAudit).includes('session-token'), false);
   assert.equal(JSON.stringify(deniedAudit).includes(productionKey), false);
 
+  const requesterForGrant = (grantBody) => createWilpayViewerGrantRequester({
+    endpoint: 'https://storage.wilpay.example/viewer-grant',
+    getAccessToken: async () => 'session-token',
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => grantBody })
+  });
+
+  await assert.rejects(
+    () => requesterForGrant({
+      signed_url: 'http://private-storage.example/object',
+      expires_at: new Date(Date.now() + 60_000).toISOString()
+    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    /signed URL must use HTTPS/
+  );
+
+  await assert.rejects(
+    () => requesterForGrant({
+      signed_url: 'https://private-storage.example/object',
+      expires_at: new Date(Date.now() - 1_000).toISOString()
+    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    /expired or has invalid expires_at/
+  );
+
+  await assert.rejects(
+    () => requesterForGrant({
+      signed_url: 'https://private-storage.example/object',
+      expires_at: new Date(Date.now() + 6 * 60_000).toISOString()
+    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    /lifetime exceeds policy/
+  );
+
+  await assert.rejects(
+    () => requesterForGrant({
+      expires_at: new Date(Date.now() + 60_000).toISOString()
+    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    /signed URL/
+  );
+
   console.log('wilpayViewerGrantClient PASS');
 }
 
