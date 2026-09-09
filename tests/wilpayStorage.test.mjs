@@ -5,7 +5,8 @@ import {
   buildWilpayFileMetadata,
   prepareWilpayPrivateUpload,
   sha256WilpayFile,
-  validateWilpayUpload
+  validateWilpayUpload,
+  WILPAY_STORAGE_LIMITS
 } from '../src/lib/wilpayStorage.js';
 
 const sampleFile = { size: 2048, type: 'application/pdf' };
@@ -19,7 +20,12 @@ assert.equal(
     fileId: 'file_789',
     mimeType: 'application/pdf'
   }),
-  'wilpay/users/user_123/loans/loan_456/document/file_789.pdf'
+  'wilpay/production/user_123/documents/file_789'
+);
+assert.equal(WILPAY_STORAGE_LIMITS.rootPrefix, 'wilpay/production');
+assert.deepEqual(
+  [...WILPAY_STORAGE_LIMITS.allowedCategories].sort(),
+  ['documents', 'guarantees', 'history', 'receipts', 'selfies'].sort()
 );
 
 const metadata = buildWilpayFileMetadata({
@@ -43,7 +49,7 @@ assert.equal(metadata.content_type, 'application/pdf');
 assert.equal(metadata.size_bytes, 2048);
 assert.equal(metadata.checksum_sha256, checksum);
 assert.equal(metadata.created_at, '2026-09-06T00:00:00.000Z');
-assert.equal(metadata.object_key, 'wilpay/users/user_123/loans/loan_456/receipt/file_789.pdf');
+assert.equal(metadata.object_key, 'wilpay/production/user_123/receipts/file_789');
 assert.equal(assertWilpayFileMetadata(metadata), true);
 
 assert.equal(
@@ -54,8 +60,14 @@ assert.equal(
     fileId: 'file_guarantee',
     mimeType: 'image/jpeg'
   }),
-  'wilpay/users/user_123/loans/loan_456/guarantee/file_guarantee.jpg'
+  'wilpay/production/user_123/guarantees/file_guarantee'
 );
+
+const legacyMetadata = {
+  ...metadata,
+  object_key: 'wilpay/users/user_123/loans/loan_456/receipt/file_789.pdf'
+};
+assert.equal(assertWilpayFileMetadata(legacyMetadata), true);
 
 const fileBytes = new TextEncoder().encode('wilpay-private-upload');
 const readableFile = {
@@ -79,7 +91,7 @@ const prepared = await prepareWilpayPrivateUpload({
 });
 assert.equal(prepared.file, readableFile);
 assert.equal(prepared.metadata.checksum_sha256, expectedHash);
-assert.equal(prepared.metadata.object_key, 'wilpay/users/user_123/loans/loan_456/document/file_hash.pdf');
+assert.equal(prepared.metadata.object_key, 'wilpay/production/user_123/documents/file_hash');
 assert.equal(Object.isFrozen(prepared), true);
 assert.equal(Object.isFrozen(prepared.metadata), true);
 assert.equal('data_url' in prepared.metadata, false);
@@ -91,10 +103,10 @@ assert.throws(() => buildWilpayFileMetadata({ userId: 'user', loanId: 'loan', ki
 assert.throws(() => buildWilpayFileMetadata({ userId: 'user', loanId: 'loan', kind: 'document', fileId: 'file', file: sampleFile, storageProvider: 'private_storage' }), /required/i);
 assert.throws(() => buildWilpayFileMetadata({ userId: 'user', loanId: 'loan', kind: 'document', fileId: 'file', file: sampleFile, checksumSha256: 'abc123', storageProvider: 'private_storage' }), /checksum/i);
 assert.throws(() => assertWilpayFileMetadata({ ...metadata, checksum_sha256: null }), /required/i);
-assert.throws(() => assertWilpayFileMetadata({ ...metadata, storage_scope: 'captapro-private' }), /private storage/i);
-assert.throws(() => assertWilpayFileMetadata({ ...metadata, bucket: 'captapro-documents' }), /bucket/i);
+assert.throws(() => assertWilpayFileMetadata({ ...metadata, storage_scope: 'other-private' }), /private storage/i);
+assert.throws(() => assertWilpayFileMetadata({ ...metadata, bucket: 'other-documents' }), /bucket/i);
 assert.throws(() => assertWilpayFileMetadata({ ...metadata, document_type: 'proof' }), /canonical/i);
-assert.throws(() => assertWilpayFileMetadata({ ...metadata, object_key: 'wilpay/users/other/loans/loan_456/receipt/file_789.pdf' }), /object_key/i);
+assert.throws(() => assertWilpayFileMetadata({ ...metadata, object_key: 'wilpay/production/other/receipts/file_789' }), /object_key/i);
 await assert.rejects(() => sha256WilpayFile({ ...readableFile, arrayBuffer: undefined }), /readable/i);
 
 console.log('wilpayStorage tests passed');

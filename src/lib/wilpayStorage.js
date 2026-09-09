@@ -1,10 +1,18 @@
 const DEFAULT_MAX_BYTES = 15 * 1024 * 1024;
 const STORAGE_SCOPE = 'wilpay-private';
 const STORAGE_BUCKET = 'wilpay-private-documents';
+const STORAGE_ROOT_PREFIX = 'wilpay/production';
 const ALLOWED_KINDS = new Set(['document', 'selfie', 'receipt', 'guarantee', 'history']);
 const KIND_ALIASES = Object.freeze({
   proof: 'receipt',
   collateral: 'guarantee'
+});
+const STORAGE_CATEGORIES = Object.freeze({
+  document: 'documents',
+  selfie: 'selfies',
+  receipt: 'receipts',
+  guarantee: 'guarantees',
+  history: 'history'
 });
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
@@ -54,6 +62,15 @@ function normalizeCreatedAt(createdAt) {
   return date.toISOString();
 }
 
+function buildLegacyWilpayObjectKey({ userId, loanId, kind, fileId, mimeType }) {
+  const safeUserId = safeSegment(userId, 'userId');
+  const safeLoanId = safeSegment(loanId, 'loanId');
+  const safeFileId = safeSegment(fileId, 'fileId');
+  const canonicalKind = normalizeKind(kind);
+  if (!ALLOWED_MIME_TYPES.has(mimeType)) throw new Error('Invalid mimeType');
+  return `wilpay/users/${safeUserId}/loans/${safeLoanId}/${canonicalKind}/${safeFileId}.${extensionForMime(mimeType)}`;
+}
+
 export function validateWilpayUpload(file, { maxBytes = DEFAULT_MAX_BYTES } = {}) {
   if (!file || typeof file !== 'object') throw new Error('File is required');
   const size = Number(file.size);
@@ -101,11 +118,12 @@ export async function prepareWilpayPrivateUpload({
 
 export function buildWilpayObjectKey({ userId, loanId, kind, fileId, mimeType }) {
   const safeUserId = safeSegment(userId, 'userId');
-  const safeLoanId = safeSegment(loanId, 'loanId');
+  safeSegment(loanId, 'loanId');
   const safeFileId = safeSegment(fileId, 'fileId');
   const canonicalKind = normalizeKind(kind);
   if (!ALLOWED_MIME_TYPES.has(mimeType)) throw new Error('Invalid mimeType');
-  return `wilpay/users/${safeUserId}/loans/${safeLoanId}/${canonicalKind}/${safeFileId}.${extensionForMime(mimeType)}`;
+  const category = STORAGE_CATEGORIES[canonicalKind];
+  return `${STORAGE_ROOT_PREFIX}/${safeUserId}/${category}/${safeFileId}`;
 }
 
 export function buildWilpayFileMetadata({
@@ -153,14 +171,18 @@ export function assertWilpayFileMetadata(metadata) {
   if (documentType !== canonicalDocumentType) {
     throw new Error('Metadata document_type must use the canonical W.I.L Pay storage type');
   }
-  const expectedKey = buildWilpayObjectKey({
+  const keyInput = {
     userId: metadata.owner_user_id,
     loanId: metadata.loan_id,
     kind: canonicalDocumentType,
     fileId: metadata.file_id,
     mimeType: metadata.content_type ?? metadata.mime_type
-  });
-  if (metadata.object_key !== expectedKey) throw new Error('Metadata object_key does not match owner/loan scope');
+  };
+  const expectedKey = buildWilpayObjectKey(keyInput);
+  const legacyKey = buildLegacyWilpayObjectKey(keyInput);
+  if (metadata.object_key !== expectedKey && metadata.object_key !== legacyKey) {
+    throw new Error('Metadata object_key does not match owner/loan scope');
+  }
   const size = Number(metadata.size_bytes);
   if (!Number.isFinite(size) || size <= 0 || size > DEFAULT_MAX_BYTES) throw new Error('Metadata size is not allowed');
   normalizeChecksum(metadata.checksum_sha256, { required: true });
@@ -171,7 +193,9 @@ export function assertWilpayFileMetadata(metadata) {
 export const WILPAY_STORAGE_LIMITS = Object.freeze({
   maxBytesPerFile: DEFAULT_MAX_BYTES,
   bucket: STORAGE_BUCKET,
+  rootPrefix: STORAGE_ROOT_PREFIX,
   allowedKinds: Object.freeze([...ALLOWED_KINDS]),
+  allowedCategories: Object.freeze(Object.values(STORAGE_CATEGORIES)),
   allowedMimeTypes: Object.freeze([...ALLOWED_MIME_TYPES])
 });
 
