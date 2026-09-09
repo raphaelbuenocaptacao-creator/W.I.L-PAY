@@ -25,6 +25,26 @@ function safeId(value, label) {
   return text;
 }
 
+function safeAudit(onAudit, event) {
+  if (typeof onAudit !== 'function') return;
+  try {
+    onAudit(Object.freeze({
+      event: 'wilpay.storage.upload_grant',
+      ...event
+    }));
+  } catch {
+    // Audit sinks are observational only; never expose or retry sensitive request data here.
+  }
+}
+
+function auditContext(payload) {
+  return Object.freeze({
+    document_type: payload.document_type,
+    content_type: String(payload.content_type).toLowerCase(),
+    size_bytes: Number(payload.size_bytes)
+  });
+}
+
 function assertWilpayUploadGrantPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('Upload grant payload is required');
@@ -95,7 +115,7 @@ function assertWilpayUploadGrantResponse(grant, payload) {
   if (Number.isNaN(expiresAt.getTime())) throw new Error('Invalid upload grant response expiry');
   const ttlMs = expiresAt.getTime() - Date.now();
   if (ttlMs <= 0 || ttlMs > MAX_GRANT_TTL_MS) throw new Error('Upload grant response expiry is not allowed');
-  return true;
+  return ttlMs;
 }
 
 function parseGrantEndpoint(value) {
@@ -126,14 +146,19 @@ export function isWilpayPrivateUploadConfigured() {
 export function createWilpayUploadGrantRequester({
   endpoint = configuredWilpayUploadGrantEndpoint(),
   getAccessToken,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  onAudit
 } = {}) {
   const url = parseGrantEndpoint(endpoint);
   if (typeof getAccessToken !== 'function') throw new Error('getAccessToken is required');
   if (typeof fetchImpl !== 'function') throw new Error('fetchImpl is required');
+  if (onAudit != null && typeof onAudit !== 'function') throw new Error('onAudit must be a function');
 
   return async function requestWilpayUploadGrant(payload) {
     assertWilpayUploadGrantPayload(payload);
+    const context = auditContext(payload);
+    safeAudit(onAudit, { phase: 'request', outcome: 'accepted', ...context });
+
     const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
     const response = await fetchImpl(url.toString(), {
       method: 'POST',
@@ -149,9 +174,24 @@ export function createWilpayUploadGrantRequester({
       referrerPolicy: 'no-referrer'
     });
 
-    if (!response?.ok) throw new Error(`Upload grant request failed (${response?.status ?? 'unknown'})`);
+    if (!response?.ok) {
+      safeAudit(onAudit, {
+        phase: 'response',
+        outcome: 'rejected',
+        http_status: Number.isInteger(response?.status) ? response.status : null,
+        ...context
+      });
+      throw new Error(`Upload grant request failed (${response?.status ?? 'unknown'})`);
+    }
+
     const grant = await response.json();
-    assertWilpayUploadGrantResponse(grant, payload);
+    const ttlMs = assertWilpayUploadGrantResponse(grant, payload);
+    safeAudit(onAudit, {
+      phase: 'response',
+      outcome: 'issued',
+      ttl_seconds: Math.floor(ttlMs / 1000),
+      ...context
+    });
     return grant;
   };
 }
