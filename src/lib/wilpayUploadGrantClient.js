@@ -106,7 +106,7 @@ function assertWilpayUploadGrantResponse(grant, payload, requestId) {
   if (!grant || typeof grant !== 'object' || Array.isArray(grant)) {
     throw new Error('Upload grant response is invalid');
   }
-  if (grant.request_id != null && safeId(grant.request_id, 'upload grant request_id') !== requestId) {
+  if (safeId(grant.request_id, 'upload grant request_id') !== requestId) {
     throw new Error('Upload grant response request_id mismatch');
   }
   if (grant.method !== 'PUT') throw new Error('Upload grant response must use PUT');
