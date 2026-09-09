@@ -25,9 +25,11 @@ const validGrant = () => ({
 });
 
 const calls = [];
+const auditEvents = [];
 const requester = createWilpayUploadGrantRequester({
   endpoint: 'https://api.wilpay.example/private-upload-grant',
   getAccessToken: async () => 'test-access-token',
+  onAudit: event => auditEvents.push(event),
   fetchImpl: async (url, options) => {
     calls.push({ url, options });
     return { ok: true, status: 200, async json() { return validGrant(); } };
@@ -47,9 +49,32 @@ assert.equal(calls[0].options.referrerPolicy, 'no-referrer');
 assert.equal(calls[0].options.headers.Authorization, 'Bearer test-access-token');
 assert.equal(calls[0].options.body, JSON.stringify(payload));
 
+assert.equal(auditEvents.length, 2);
+assert.deepEqual(auditEvents.map(event => [event.phase, event.outcome]), [
+  ['request', 'accepted'],
+  ['response', 'issued']
+]);
+for (const event of auditEvents) {
+  assert.equal(event.event, 'wilpay.storage.upload_grant');
+  assert.equal(event.document_type, 'document');
+  assert.equal(event.content_type, 'application/pdf');
+  assert.equal(event.size_bytes, 1024);
+  for (const forbiddenKey of ['owner_user_id', 'auth_uid', 'loan_id', 'file_id', 'object_key', 'bucket', 'upload_url', 'signed_url', 'checksum_sha256', 'access_token', 'token']) {
+    assert.equal(Object.hasOwn(event, forbiddenKey), false, `audit event must not contain ${forbiddenKey}`);
+  }
+}
+const serializedAudit = JSON.stringify(auditEvents);
+for (const secretOrIdentifier of [payload.owner_user_id, payload.loan_id, payload.file_id, payload.object_key, payload.checksum_sha256, validGrant().upload_url, 'test-access-token']) {
+  assert.equal(serializedAudit.includes(secretOrIdentifier), false, 'audit event must not serialize sensitive grant data');
+}
+
 assert.throws(
   () => createWilpayUploadGrantRequester({ endpoint: 'http://api.wilpay.example/grant', getAccessToken: async () => 'x', fetchImpl: async () => ({ ok: true, json: async () => ({}) }) }),
   /must use HTTPS/
+);
+assert.throws(
+  () => createWilpayUploadGrantRequester({ endpoint: 'https://api.wilpay.example/grant', getAccessToken: async () => 'x', fetchImpl: async () => ({ ok: true, json: async () => ({}) }), onAudit: 'console' }),
+  /onAudit must be a function/
 );
 
 let blockedFetches = 0;
@@ -85,14 +110,19 @@ await assert.rejects(
   /access token is required/
 );
 
+const rejectedAudit = [];
 await assert.rejects(
   createWilpayUploadGrantRequester({
     endpoint: 'https://api.wilpay.example/grant',
     getAccessToken: async () => 'token',
+    onAudit: event => rejectedAudit.push(event),
     fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) })
   })(payload),
   /failed \(403\)/
 );
+assert.equal(rejectedAudit.at(-1).outcome, 'rejected');
+assert.equal(rejectedAudit.at(-1).http_status, 403);
+assert.equal(Object.hasOwn(rejectedAudit.at(-1), 'object_key'), false);
 
 for (const [name, mutate, expected] of [
   ['bucket', grant => ({ ...grant, bucket: 'other-bucket' }), /bucket mismatch/],
