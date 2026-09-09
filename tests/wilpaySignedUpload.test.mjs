@@ -22,7 +22,7 @@ const metadata = {
   kind: 'receipt',
   storage_provider: 'private_storage',
   bucket: 'wilpay-private-documents',
-  object_key: 'wilpay/users/user_1/loans/loan_1/receipt/file_1.pdf',
+  object_key: 'wilpay/production/user_1/receipts/file_1',
   content_type: 'application/pdf',
   mime_type: 'application/pdf',
   size_bytes: bytes.byteLength,
@@ -30,6 +30,11 @@ const metadata = {
   created_at: '2026-09-06T00:00:00.000Z',
   storage_scope: 'wilpay-private',
   visibility: 'private'
+};
+
+const legacyMetadata = {
+  ...metadata,
+  object_key: 'wilpay/users/user_1/loans/loan_1/receipt/file_1.pdf'
 };
 
 const grant = {
@@ -56,8 +61,10 @@ assert.deepEqual(buildWilpaySignedUploadRequest(metadata), {
 });
 assert.equal('upload_url' in buildWilpaySignedUploadRequest(metadata), false);
 
+assert.throws(() => buildWilpaySignedUploadRequest(legacyMetadata), /production private storage namespace/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, ...legacyMetadata }, legacyMetadata, uploadPolicy), /production private storage namespace/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, bucket: 'captapro-private' }, metadata, uploadPolicy), /bucket mismatch/i);
-assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, object_key: 'wilpay/users/other/loans/loan_1/receipt/file_1.pdf' }, metadata, uploadPolicy), /object key mismatch/i);
+assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, object_key: 'wilpay/production/other/receipts/file_1' }, metadata, uploadPolicy), /object key mismatch/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'http://storage.example.test/upload' }, metadata, uploadPolicy), /HTTPS/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'https://user:secret@storage.example.test/upload' }, metadata, uploadPolicy), /credentials/i);
 assert.throws(() => assertWilpaySignedUploadGrant({ ...grant, upload_url: 'https://external.example.test/upload' }, metadata, uploadPolicy), /origin is not allowed/i);
