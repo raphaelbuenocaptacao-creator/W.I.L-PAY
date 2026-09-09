@@ -14,18 +14,29 @@ const payload = {
   checksum_sha256: checksum
 };
 
+const validGrant = () => ({
+  method: 'PUT',
+  bucket: payload.bucket,
+  object_key: payload.object_key,
+  content_type: payload.content_type,
+  checksum_sha256: payload.checksum_sha256,
+  upload_url: 'https://storage.wilpay.example/object',
+  expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+});
+
 const calls = [];
 const requester = createWilpayUploadGrantRequester({
   endpoint: 'https://api.wilpay.example/private-upload-grant',
   getAccessToken: async () => 'test-access-token',
   fetchImpl: async (url, options) => {
     calls.push({ url, options });
-    return { ok: true, status: 200, async json() { return { method: 'PUT', upload_url: 'https://storage.wilpay.example/object' }; } };
+    return { ok: true, status: 200, async json() { return validGrant(); } };
   }
 });
 
 const grant = await requester(payload);
 assert.equal(grant.method, 'PUT');
+assert.equal(grant.object_key, payload.object_key);
 assert.equal(calls.length, 1);
 assert.equal(calls[0].url, 'https://api.wilpay.example/private-upload-grant');
 assert.equal(calls[0].options.method, 'POST');
@@ -47,7 +58,7 @@ const failClosedRequester = createWilpayUploadGrantRequester({
   getAccessToken: async () => 'token',
   fetchImpl: async () => {
     blockedFetches += 1;
-    return { ok: true, json: async () => ({}) };
+    return { ok: true, json: async () => validGrant() };
   }
 });
 
@@ -69,7 +80,7 @@ await assert.rejects(
   createWilpayUploadGrantRequester({
     endpoint: 'https://api.wilpay.example/grant',
     getAccessToken: async () => '',
-    fetchImpl: async () => ({ ok: true, json: async () => ({}) })
+    fetchImpl: async () => ({ ok: true, json: async () => validGrant() })
   })(payload),
   /access token is required/
 );
@@ -82,5 +93,23 @@ await assert.rejects(
   })(payload),
   /failed \(403\)/
 );
+
+for (const [name, mutate, expected] of [
+  ['bucket', grant => ({ ...grant, bucket: 'other-bucket' }), /bucket mismatch/],
+  ['object key', grant => ({ ...grant, object_key: 'wilpay\/production\/other\/documents\/file-1' }), /object_key mismatch/],
+  ['content type', grant => ({ ...grant, content_type: 'image\/jpeg' }), /content_type mismatch/],
+  ['checksum', grant => ({ ...grant, checksum_sha256: 'b'.repeat(64) }), /checksum mismatch/],
+  ['method', grant => ({ ...grant, method: 'POST' }), /must use PUT/],
+  ['expired', grant => ({ ...grant, expires_at: new Date(Date.now() - 1000).toISOString() }), /expiry is not allowed/],
+  ['ttl too long', grant => ({ ...grant, expires_at: new Date(Date.now() + 11 * 60 * 1000).toISOString() }), /expiry is not allowed/],
+  ['insecure upload url', grant => ({ ...grant, upload_url: 'http:\/\/storage.wilpay.example\/object' }), /must use HTTPS/]
+]) {
+  const tamperedRequester = createWilpayUploadGrantRequester({
+    endpoint: 'https://api.wilpay.example/grant',
+    getAccessToken: async () => 'token',
+    fetchImpl: async () => ({ ok: true, json: async () => mutate(validGrant()) })
+  });
+  await assert.rejects(tamperedRequester(payload), expected, `${name} must be rejected`);
+}
 
 console.log('wilpayUploadGrantClient.test.mjs PASS');
