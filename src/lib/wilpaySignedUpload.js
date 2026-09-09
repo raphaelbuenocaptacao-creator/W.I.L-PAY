@@ -1,4 +1,4 @@
-import { assertWilpayFileMetadata, sha256WilpayFile } from './wilpayStorage.js';
+import { assertWilpayFileMetadata, sha256WilpayFile, WILPAY_STORAGE_LIMITS } from './wilpayStorage.js';
 
 const HTTPS_PROTOCOL = 'https:';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
@@ -53,10 +53,20 @@ function parseUploadUrl(value, allowedUploadOrigins) {
   return url;
 }
 
+function assertWilpayNewUploadNamespace(metadata) {
+  const objectKey = String(metadata?.object_key || '');
+  const requiredPrefix = `${WILPAY_STORAGE_LIMITS.rootPrefix}/`;
+  if (!objectKey.startsWith(requiredPrefix)) {
+    throw new Error('New W.I.L Pay uploads must use the production private storage namespace');
+  }
+  return true;
+}
+
 export function assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOrigins } = {}) {
   if (!grant || typeof grant !== 'object') throw new Error('Upload grant is required');
   if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
   assertWilpayFileMetadata(metadata);
+  assertWilpayNewUploadNamespace(metadata);
   if (grant.bucket !== metadata.bucket) throw new Error('Upload grant bucket mismatch');
   if (grant.object_key !== metadata.object_key) throw new Error('Upload grant object key mismatch');
   if (grant.content_type !== metadata.content_type) throw new Error('Upload grant content type mismatch');
@@ -73,6 +83,7 @@ export function assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOr
 export function buildWilpaySignedUploadRequest(metadata) {
   if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
   assertWilpayFileMetadata(metadata);
+  assertWilpayNewUploadNamespace(metadata);
   return Object.freeze({
     file_id: metadata.file_id,
     owner_user_id: metadata.owner_user_id,
@@ -89,6 +100,7 @@ export function buildWilpaySignedUploadRequest(metadata) {
 export async function assertWilpayUploadContent(file, metadata) {
   if (!file || typeof file !== 'object') throw new Error('File is required');
   assertWilpayFileMetadata(metadata);
+  assertWilpayNewUploadNamespace(metadata);
   if (Number(file.size) !== Number(metadata.size_bytes)) throw new Error('Upload file size mismatch');
   if (String(file.type || '').toLowerCase() !== String(metadata.content_type || '').toLowerCase()) {
     throw new Error('Upload file content type mismatch');
