@@ -31,6 +31,7 @@ const result = await uploadWilpayFileToPrivateStorage({
     calls.push('grant');
     return {
       ...request,
+      request_id: 'test_private_flow_success_1',
       method: 'PUT',
       upload_url: 'https://storage.example.com/upload/object',
       expires_at: new Date(Date.now() + 60_000).toISOString()
@@ -66,6 +67,7 @@ await assert.rejects(
     storageProvider: 'private_storage',
     requestUploadGrant: async request => ({
       ...request,
+      request_id: 'test_private_flow_failure_1',
       method: 'PUT',
       upload_url: 'https://storage.example.com/upload/fail',
       expires_at: new Date(Date.now() + 60_000).toISOString()
