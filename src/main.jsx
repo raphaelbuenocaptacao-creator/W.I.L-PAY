@@ -17,7 +17,28 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>
 );
 
-const APP_VERSION = 'v37-live-sync';
+const APP_VERSION = 'v38-private-vary-range-safe';
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  window.dispatchEvent(new CustomEvent('wilpay:pwa-install-available'));
+});
+
+window.installWilPay = async () => {
+  if (!deferredInstallPrompt) return false;
+  deferredInstallPrompt.prompt();
+  const choice = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  return choice.outcome === 'accepted';
+};
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  window.dispatchEvent(new CustomEvent('wilpay:pwa-installed'));
+});
+
 const isSecureContextForPwa = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
 if ('serviceWorker' in navigator && isSecureContextForPwa) {
   window.addEventListener('load', async () => {
