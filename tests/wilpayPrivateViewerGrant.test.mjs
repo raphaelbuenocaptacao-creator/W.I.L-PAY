@@ -6,7 +6,8 @@ const future = new Date(now + 60_000).toISOString();
 const metadata = {
   file_id: 'file-123',
   object_key: 'wilpay/users/u1/loans/l1/document/file-123.pdf',
-  mime_type: 'application/pdf'
+  mime_type: 'application/pdf',
+  auth_uid: 'u1'
 };
 
 let requestPayload = null;
@@ -24,12 +25,22 @@ const resolved = await resolveWilpayPrivateViewerSource({
 
 assert.deepEqual(requestPayload, {
   file_id: metadata.file_id,
-  object_key: metadata.object_key
+  object_key: metadata.object_key,
+  owner_user_id: metadata.auth_uid
 });
 assert.equal(resolved.file_id, metadata.file_id);
 assert.equal(resolved.mime_type, 'application/pdf');
 assert.match(resolved.source, /^https:\/\//);
 assert.equal(WILPAY_MAX_VIEWER_GRANT_TTL_MS, 5 * 60 * 1000);
+
+await assert.rejects(
+  resolveWilpayPrivateViewerSource({
+    metadata: { ...metadata, auth_uid: '' },
+    now,
+    requestViewerGrant: async () => ({})
+  }),
+  /metadata\.auth_uid is required/
+);
 
 await assert.rejects(
   resolveWilpayPrivateViewerSource({
