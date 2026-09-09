@@ -39,6 +39,7 @@ const legacyMetadata = {
 
 const grant = {
   ...metadata,
+  request_id: 'upload_request_1',
   method: 'PUT',
   upload_url: 'https://storage.example.test/signed-upload',
   expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
@@ -107,5 +108,50 @@ assert.equal(request.options.credentials, 'omit');
 assert.equal(request.options.cache, 'no-store');
 assert.equal(request.options.referrerPolicy, 'no-referrer');
 assert.equal(result.object_key, metadata.object_key);
+
+await assert.rejects(
+  () => uploadWilpayPrivateFile({
+    file,
+    metadata,
+    grant,
+    allowedUploadOrigins: uploadPolicy.allowedUploadOrigins,
+    fetchImpl: async () => ({ ok: true, status: 200 })
+  }),
+  /already been consumed/i
+);
+
+let failedAttempts = 0;
+const failedGrant = {
+  ...grant,
+  request_id: 'upload_request_failed_once',
+  upload_url: 'https://storage.example.test/signed-upload-failed'
+};
+await assert.rejects(
+  () => uploadWilpayPrivateFile({
+    file,
+    metadata,
+    grant: failedGrant,
+    allowedUploadOrigins: uploadPolicy.allowedUploadOrigins,
+    fetchImpl: async () => {
+      failedAttempts += 1;
+      return { ok: false, status: 503 };
+    }
+  }),
+  /Private upload failed/i
+);
+await assert.rejects(
+  () => uploadWilpayPrivateFile({
+    file,
+    metadata,
+    grant: failedGrant,
+    allowedUploadOrigins: uploadPolicy.allowedUploadOrigins,
+    fetchImpl: async () => {
+      failedAttempts += 1;
+      return { ok: true, status: 200 };
+    }
+  }),
+  /already been consumed/i
+);
+assert.equal(failedAttempts, 1);
 
 console.log('wilpaySignedUpload tests passed');
