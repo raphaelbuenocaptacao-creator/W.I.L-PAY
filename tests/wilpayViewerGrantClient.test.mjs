@@ -19,6 +19,7 @@ async function run() {
   const request = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_1',
     onAudit: event => audit.push(event),
     fetchImpl: async (url, options) => {
       seen = { url, options };
@@ -30,6 +31,7 @@ async function run() {
             file_id: 'file-123',
             object_key: productionKey,
             owner_user_id: 'user_1',
+            request_id: 'req_1',
             signed_url: 'https://private-storage.example/object?signature=temporary',
             expires_at: new Date(Date.now() + 60_000).toISOString(),
             mime_type: 'application/pdf'
@@ -48,11 +50,13 @@ async function run() {
   assert.equal(seen.options.credentials, 'omit');
   assert.equal(seen.options.referrerPolicy, 'no-referrer');
   assert.equal(seen.options.headers.Authorization, 'Bearer session-token');
+  assert.equal(seen.options.headers['X-WILPay-Request-ID'], 'req_1');
   assert.deepEqual(JSON.parse(seen.options.body), {
     file_id: 'file-123',
     object_key: productionKey,
     owner_user_id: 'user_1',
-    mime_type: 'application/pdf'
+    mime_type: 'application/pdf',
+    request_id: 'req_1'
   });
   assert.ok(!seen.options.body.includes('session-token'));
 
@@ -75,6 +79,8 @@ async function run() {
   const serializedAudit = JSON.stringify(audit);
   for (const sensitive of [
     'session-token',
+    'req_1',
+    'request_id',
     'user_1',
     'file-123',
     productionKey,
@@ -93,6 +99,7 @@ async function run() {
   const failClosed = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_failclosed',
     fetchImpl: async () => {
       outOfScopeCalls += 1;
       return { ok: true, status: 200, json: async () => ({}) };
@@ -134,6 +141,7 @@ async function run() {
   const legacy = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_legacy',
     fetchImpl: async (_url, options) => {
       legacyBody = JSON.parse(options.body);
       return {
@@ -147,12 +155,14 @@ async function run() {
   assert.deepEqual(legacyBody, {
     file_id: 'file-123',
     object_key: legacyKey,
-    owner_user_id: 'user_1'
+    owner_user_id: 'user_1',
+    request_id: 'req_legacy'
   });
 
   const tampered = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_tampered',
     fetchImpl: async () => ({
       ok: true,
       status: 200,
@@ -174,6 +184,7 @@ async function run() {
   const tamperedOwner = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_owner',
     fetchImpl: async () => ({
       ok: true,
       status: 200,
@@ -192,6 +203,26 @@ async function run() {
     /owner_user_id does not match request/
   );
 
+  const tamperedRequestId = createWilpayViewerGrantRequester({
+    endpoint: 'https://storage.wilpay.example/viewer-grant',
+    getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_expected',
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        request_id: 'req_other',
+        signed_url: 'https://private-storage.example/object',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        mime_type: 'application/pdf'
+      })
+    })
+  });
+  await assert.rejects(
+    () => tamperedRequestId(productionMetadata),
+    /request_id does not match request/
+  );
+
   await assert.rejects(
     () => request({ file_id: '', object_key: 'x', owner_user_id: 'user_1', mime_type: 'application/pdf' }),
     /file_id is required/
@@ -201,6 +232,7 @@ async function run() {
   const denied = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_denied',
     onAudit: event => deniedAudit.push(event),
     fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) })
   });
@@ -212,10 +244,12 @@ async function run() {
   assert.equal(deniedAudit.at(-1)?.http_status, 403);
   assert.equal(JSON.stringify(deniedAudit).includes('session-token'), false);
   assert.equal(JSON.stringify(deniedAudit).includes(productionKey), false);
+  assert.equal(JSON.stringify(deniedAudit).includes('req_denied'), false);
 
   const requesterForGrant = (grantBody) => createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
+    createRequestId: () => 'req_generic',
     fetchImpl: async () => ({ ok: true, status: 200, json: async () => grantBody })
   });
 
