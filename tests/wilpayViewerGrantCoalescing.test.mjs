@@ -15,14 +15,15 @@ const gate = new Promise(resolve => { release = resolve; });
 const request = createWilpayViewerGrantRequester({
   endpoint: 'https://storage.example.test/viewer-grant',
   getAccessToken: async () => 'test-value',
-  fetchImpl: async () => {
+  fetchImpl: async (_url, options) => {
     fetchCalls += 1;
+    const requestId = JSON.parse(options.body).request_id;
     await gate;
     return {
       ok: true,
       status: 200,
       json: async () => ({
-        request_id: `request-${fetchCalls}`,
+        request_id: requestId,
         file_id: metadata.file_id,
         object_key: metadata.object_key,
         owner_user_id: metadata.owner_user_id,
