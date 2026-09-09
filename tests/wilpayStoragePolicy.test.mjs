@@ -24,10 +24,20 @@ assert.deepEqual(
   [...policy.storage.allowed_content_types].sort(),
   [...WILPAY_STORAGE_LIMITS.allowedMimeTypes].sort()
 );
+assert.equal(policy.storage.root_prefix, WILPAY_STORAGE_LIMITS.rootPrefix);
+assert.deepEqual(
+  [...policy.storage.allowed_categories].sort(),
+  [...WILPAY_STORAGE_LIMITS.allowedCategories].sort()
+);
 assert.equal(
   policy.storage.object_key_template,
+  'wilpay/production/{owner_user_id}/{category}/{file_id}'
+);
+assert.equal(
+  policy.storage.legacy_object_key_template,
   'wilpay/users/{user_id}/loans/{loan_id}/{document_type}/{file_id}.{extension}'
 );
+assert.equal(policy.storage.legacy_object_keys_read_only, true);
 assert.equal(policy.storage.direct_public_urls, false);
 assert.equal(policy.storage.viewer_access, 'short_lived_signed_url');
 
@@ -38,7 +48,9 @@ const sampleObjectKey = buildWilpayObjectKey({
   fileId: 'file_789',
   mimeType: 'application/pdf'
 });
-assert.match(sampleObjectKey, /^wilpay\/users\/user_123\/loans\/loan_456\/document\/file_789\.pdf$/);
+assert.equal(sampleObjectKey, 'wilpay/production/user_123/documents/file_789');
+assert.ok(sampleObjectKey.startsWith(`${WILPAY_STORAGE_LIMITS.rootPrefix}/user_123/`));
+assert.equal(sampleObjectKey.includes('loan_456'), false);
 
 assert.equal(policy.database.store_binary_files, false);
 assert.equal(policy.database.store_metadata_only, true);
@@ -50,6 +62,8 @@ assert.equal(policy.security.tenant_isolation, 'owner_user_id');
 assert.equal(policy.security.deny_anonymous_reads, true);
 assert.equal(policy.security.deny_cross_user_reads, true);
 assert.equal(policy.security.secrets_in_client_bundle, false);
+assert.equal(policy.migration.new_upload_namespace, WILPAY_STORAGE_LIMITS.rootPrefix);
+assert.equal(policy.migration.legacy_object_keys, 'read_only_compatibility');
 assert.equal(policy.migration.destructive_cleanup_requires_explicit_approval, true);
 
 console.log('wilpayStoragePolicy tests passed');
