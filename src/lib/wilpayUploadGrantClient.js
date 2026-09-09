@@ -2,6 +2,7 @@ import { WILPAY_STORAGE_LIMITS } from './wilpayStorage.js';
 
 const HTTPS_PROTOCOL = 'https:';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+const MAX_GRANT_TTL_MS = 10 * 60 * 1000;
 const DOCUMENT_CATEGORY = Object.freeze({
   document: 'documents',
   selfie: 'selfies',
@@ -61,6 +62,42 @@ function assertWilpayUploadGrantPayload(payload) {
   return true;
 }
 
+function assertGrantUploadUrl(value) {
+  let url;
+  try {
+    url = new URL(requiredText(value, 'upload_url'));
+  } catch {
+    throw new Error('Invalid upload grant upload_url');
+  }
+  if (url.username || url.password || url.hash) throw new Error('Invalid upload grant upload_url');
+  if (url.protocol !== HTTPS_PROTOCOL && !LOCAL_HOSTS.has(url.hostname)) {
+    throw new Error('Upload grant upload_url must use HTTPS');
+  }
+  return true;
+}
+
+function assertWilpayUploadGrantResponse(grant, payload) {
+  if (!grant || typeof grant !== 'object' || Array.isArray(grant)) {
+    throw new Error('Upload grant response is invalid');
+  }
+  if (grant.method !== 'PUT') throw new Error('Upload grant response must use PUT');
+  if (grant.bucket !== payload.bucket) throw new Error('Upload grant response bucket mismatch');
+  if (grant.object_key !== payload.object_key) throw new Error('Upload grant response object_key mismatch');
+  if (String(grant.content_type || '').toLowerCase() !== String(payload.content_type || '').toLowerCase()) {
+    throw new Error('Upload grant response content_type mismatch');
+  }
+  if (String(grant.checksum_sha256 || '').toLowerCase() !== String(payload.checksum_sha256 || '').toLowerCase()) {
+    throw new Error('Upload grant response checksum mismatch');
+  }
+  assertGrantUploadUrl(grant.upload_url);
+
+  const expiresAt = new Date(grant.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) throw new Error('Invalid upload grant response expiry');
+  const ttlMs = expiresAt.getTime() - Date.now();
+  if (ttlMs <= 0 || ttlMs > MAX_GRANT_TTL_MS) throw new Error('Upload grant response expiry is not allowed');
+  return true;
+}
+
 function parseGrantEndpoint(value) {
   let url;
   try {
@@ -114,7 +151,7 @@ export function createWilpayUploadGrantRequester({
 
     if (!response?.ok) throw new Error(`Upload grant request failed (${response?.status ?? 'unknown'})`);
     const grant = await response.json();
-    if (!grant || typeof grant !== 'object') throw new Error('Upload grant response is invalid');
+    assertWilpayUploadGrantResponse(grant, payload);
     return grant;
   };
 }
