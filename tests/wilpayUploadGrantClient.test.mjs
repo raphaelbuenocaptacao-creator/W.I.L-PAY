@@ -137,13 +137,17 @@ assert.equal(rejectedAudit.at(-1).http_status, 403);
 assert.equal(Object.hasOwn(rejectedAudit.at(-1), 'object_key'), false);
 assert.equal(Object.hasOwn(rejectedAudit.at(-1), 'request_id'), false);
 
-const compatibilityRequester = createWilpayUploadGrantRequester({
+const missingRequestIdRequester = createWilpayUploadGrantRequester({
   endpoint: 'https://api.wilpay.example/grant',
   getAccessToken: async () => 'token',
   createRequestId: () => requestId,
   fetchImpl: async () => ({ ok: true, json: async () => validGrant(null) })
 });
-assert.equal((await compatibilityRequester(payload)).request_id, undefined, 'backend may adopt request_id echo without breaking current grants');
+await assert.rejects(
+  missingRequestIdRequester(payload),
+  /upload grant request_id is required/,
+  'production upload grants must echo the request_id'
+);
 
 for (const [name, mutate, expected] of [
   ['request id', grant => ({ ...grant, request_id: 'different-request' }), /request_id mismatch/],
