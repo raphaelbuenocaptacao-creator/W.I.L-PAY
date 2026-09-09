@@ -21,6 +21,7 @@ async function run() {
           return {
             file_id: 'file-123',
             object_key: productionKey,
+            owner_user_id: 'user_1',
             signed_url: 'https://private-storage.example/object?signature=temporary',
             expires_at: new Date(Date.now() + 60_000).toISOString(),
             mime_type: 'application/pdf'
@@ -30,7 +31,7 @@ async function run() {
     }
   });
 
-  const grant = await request({ file_id: 'file-123', object_key: productionKey, ignored: 'nope' });
+  const grant = await request({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1', ignored: 'nope' });
   assert.equal(grant.mime_type, 'application/pdf');
   assert.equal(seen.url, 'https://storage.wilpay.example/viewer-grant');
   assert.equal(seen.options.method, 'POST');
@@ -41,7 +42,8 @@ async function run() {
   assert.equal(seen.options.headers.Authorization, 'Bearer session-token');
   assert.deepEqual(JSON.parse(seen.options.body), {
     file_id: 'file-123',
-    object_key: productionKey
+    object_key: productionKey,
+    owner_user_id: 'user_1'
   });
   assert.ok(!seen.options.body.includes('session-token'));
 
@@ -56,16 +58,24 @@ async function run() {
   });
 
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: 'other-app/users/user_1/file-123' }),
+    () => failClosed({ file_id: 'file-123', object_key: 'other-app/users/user_1/file-123', owner_user_id: 'user_1' }),
     /outside W\.I\.L Pay private scope/
   );
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/documents/file-999' }),
+    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/documents/file-999', owner_user_id: 'user_1' }),
     /does not match file_id/
   );
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/unknown/file-123' }),
+    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/unknown/file-123', owner_user_id: 'user_1' }),
     /category is invalid/
+  );
+  await assert.rejects(
+    () => failClosed({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_2' }),
+    /owner does not match attachment owner/
+  );
+  await assert.rejects(
+    () => failClosed({ file_id: 'file-123', object_key: productionKey }),
+    /owner_user_id is required/
   );
   assert.equal(outOfScopeCalls, 0);
 
@@ -79,7 +89,7 @@ async function run() {
       json: async () => ({ signed_url: 'https://private-storage.example/legacy', expires_at: new Date(Date.now() + 60_000).toISOString() })
     })
   });
-  await legacy({ file_id: 'file-123', object_key: legacyKey });
+  await legacy({ file_id: 'file-123', object_key: legacyKey, owner_user_id: 'user_1' });
 
   const tampered = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
@@ -90,18 +100,39 @@ async function run() {
       json: async () => ({
         file_id: 'file-999',
         object_key: productionKey,
+        owner_user_id: 'user_1',
         signed_url: 'https://private-storage.example/object',
         expires_at: new Date(Date.now() + 60_000).toISOString()
       })
     })
   });
   await assert.rejects(
-    () => tampered({ file_id: 'file-123', object_key: productionKey }),
+    () => tampered({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
     /file_id does not match request/
   );
 
+  const tamperedOwner = createWilpayViewerGrantRequester({
+    endpoint: 'https://storage.wilpay.example/viewer-grant',
+    getAccessToken: async () => 'session-token',
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        file_id: 'file-123',
+        object_key: productionKey,
+        owner_user_id: 'user_2',
+        signed_url: 'https://private-storage.example/object',
+        expires_at: new Date(Date.now() + 60_000).toISOString()
+      })
+    })
+  });
   await assert.rejects(
-    () => request({ file_id: '', object_key: 'x' }),
+    () => tamperedOwner({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    /owner_user_id does not match request/
+  );
+
+  await assert.rejects(
+    () => request({ file_id: '', object_key: 'x', owner_user_id: 'user_1' }),
     /file_id is required/
   );
 
@@ -111,7 +142,7 @@ async function run() {
     fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) })
   });
   await assert.rejects(
-    () => denied({ file_id: 'file-123', object_key: productionKey }),
+    () => denied({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
     /Viewer grant request failed \(403\)/
   );
 
