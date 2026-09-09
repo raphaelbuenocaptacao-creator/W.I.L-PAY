@@ -127,7 +127,7 @@ function parseSignedViewerUrl(value) {
   return url;
 }
 
-function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expectedMimeType, requestId, now }) {
+function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expectedMimeType, requestId, requireRequestId, now }) {
   if (grant.file_id != null && requiredText(grant.file_id, 'Viewer grant file_id') !== fileId) {
     throw new Error('Viewer grant file_id does not match request');
   }
@@ -140,8 +140,12 @@ function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId, expec
   if (grant.auth_uid != null && safeSegment(grant.auth_uid, 'Viewer grant auth_uid') !== ownerUserId) {
     throw new Error('Viewer grant auth_uid does not match request');
   }
-  if (grant.request_id != null && safeSegment(grant.request_id, 'Viewer grant request_id') !== requestId) {
-    throw new Error('Viewer grant request_id does not match request');
+  if (grant.request_id != null) {
+    if (safeSegment(grant.request_id, 'Viewer grant request_id') !== requestId) {
+      throw new Error('Viewer grant request_id does not match request');
+    }
+  } else if (requireRequestId) {
+    throw new Error('Viewer grant request_id is required for production objects');
   }
 
   if (expectedMimeType) {
@@ -254,6 +258,7 @@ export function createWilpayViewerGrantRequester({
         ownerUserId,
         expectedMimeType,
         requestId,
+        requireRequestId: isProductionObject,
         now: Date.now()
       });
       safeAudit(onAudit, { phase: 'response', outcome: 'issued', ...context });
