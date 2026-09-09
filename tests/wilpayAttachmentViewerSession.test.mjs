@@ -35,7 +35,8 @@ const privateResolved = await resolveWilpayAttachmentForCurrentSession(privateRe
 assert.equal(privateResolved.mode, 'private');
 assert.deepEqual(grantRequest, {
   file_id: privateRecord.file_id,
-  object_key: privateRecord.object_key
+  object_key: privateRecord.object_key,
+  owner_user_id: privateRecord.auth_uid
 });
 assert.equal(privateResolved.file_id, privateRecord.file_id);
 
