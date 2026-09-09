@@ -22,6 +22,7 @@ const request = createWilpayViewerGrantRequester({
       ok: true,
       status: 200,
       json: async () => ({
+        request_id: `request-${fetchCalls}`,
         file_id: metadata.file_id,
         object_key: metadata.object_key,
         owner_user_id: metadata.owner_user_id,
