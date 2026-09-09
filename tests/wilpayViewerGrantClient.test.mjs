@@ -10,6 +10,12 @@ async function run() {
   let seen;
   const audit = [];
   const productionKey = 'wilpay/production/user_1/documents/file-123';
+  const productionMetadata = Object.freeze({
+    file_id: 'file-123',
+    object_key: productionKey,
+    owner_user_id: 'user_1',
+    mime_type: 'application/pdf'
+  });
   const request = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
@@ -33,7 +39,7 @@ async function run() {
     }
   });
 
-  const grant = await request({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1', ignored: 'nope' });
+  const grant = await request({ ...productionMetadata, ignored: 'nope' });
   assert.equal(grant.mime_type, 'application/pdf');
   assert.equal(seen.url, 'https://storage.wilpay.example/viewer-grant');
   assert.equal(seen.options.method, 'POST');
@@ -48,6 +54,7 @@ async function run() {
     owner_user_id: 'user_1'
   });
   assert.ok(!seen.options.body.includes('session-token'));
+  assert.ok(!seen.options.body.includes('application/pdf'));
 
   assert.deepEqual(audit, [
     {
@@ -93,24 +100,32 @@ async function run() {
   });
 
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: 'other-app/users/user_1/file-123', owner_user_id: 'user_1' }),
+    () => failClosed({ file_id: 'file-123', object_key: 'other-app/users/user_1/file-123', owner_user_id: 'user_1', mime_type: 'application/pdf' }),
     /outside W\.I\.L Pay private scope/
   );
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/documents/file-999', owner_user_id: 'user_1' }),
+    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/documents/file-999', owner_user_id: 'user_1', mime_type: 'application/pdf' }),
     /does not match file_id/
   );
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/unknown/file-123', owner_user_id: 'user_1' }),
+    () => failClosed({ file_id: 'file-123', object_key: 'wilpay/production/user_1/unknown/file-123', owner_user_id: 'user_1', mime_type: 'application/pdf' }),
     /category is invalid/
   );
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_2' }),
+    () => failClosed({ ...productionMetadata, owner_user_id: 'user_2' }),
     /owner does not match attachment owner/
   );
   await assert.rejects(
-    () => failClosed({ file_id: 'file-123', object_key: productionKey }),
+    () => failClosed({ file_id: 'file-123', object_key: productionKey, mime_type: 'application/pdf' }),
     /owner_user_id is required/
+  );
+  await assert.rejects(
+    () => failClosed({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    /attachment mime_type is required/
+  );
+  await assert.rejects(
+    () => failClosed({ ...productionMetadata, mime_type: 'text/html' }),
+    /attachment mime_type is not allowed/
   );
   assert.equal(outOfScopeCalls, 0);
 
@@ -137,12 +152,13 @@ async function run() {
         object_key: productionKey,
         owner_user_id: 'user_1',
         signed_url: 'https://private-storage.example/object',
-        expires_at: new Date(Date.now() + 60_000).toISOString()
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        mime_type: 'application/pdf'
       })
     })
   });
   await assert.rejects(
-    () => tampered({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    () => tampered(productionMetadata),
     /file_id does not match request/
   );
 
@@ -157,17 +173,18 @@ async function run() {
         object_key: productionKey,
         owner_user_id: 'user_2',
         signed_url: 'https://private-storage.example/object',
-        expires_at: new Date(Date.now() + 60_000).toISOString()
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        mime_type: 'application/pdf'
       })
     })
   });
   await assert.rejects(
-    () => tamperedOwner({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    () => tamperedOwner(productionMetadata),
     /owner_user_id does not match request/
   );
 
   await assert.rejects(
-    () => request({ file_id: '', object_key: 'x', owner_user_id: 'user_1' }),
+    () => request({ file_id: '', object_key: 'x', owner_user_id: 'user_1', mime_type: 'application/pdf' }),
     /file_id is required/
   );
 
@@ -179,7 +196,7 @@ async function run() {
     fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) })
   });
   await assert.rejects(
-    () => denied({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+    () => denied(productionMetadata),
     /Viewer grant request failed \(403\)/
   );
   assert.equal(deniedAudit.at(-1)?.outcome, 'rejected');
@@ -196,32 +213,53 @@ async function run() {
   await assert.rejects(
     () => requesterForGrant({
       signed_url: 'http://private-storage.example/object',
-      expires_at: new Date(Date.now() + 60_000).toISOString()
-    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      mime_type: 'application/pdf'
+    })(productionMetadata),
     /signed URL must use HTTPS/
   );
 
   await assert.rejects(
     () => requesterForGrant({
       signed_url: 'https://private-storage.example/object',
-      expires_at: new Date(Date.now() - 1_000).toISOString()
-    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+      expires_at: new Date(Date.now() - 1_000).toISOString(),
+      mime_type: 'application/pdf'
+    })(productionMetadata),
     /expired or has invalid expires_at/
   );
 
   await assert.rejects(
     () => requesterForGrant({
       signed_url: 'https://private-storage.example/object',
-      expires_at: new Date(Date.now() + 6 * 60_000).toISOString()
-    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+      expires_at: new Date(Date.now() + 6 * 60_000).toISOString(),
+      mime_type: 'application/pdf'
+    })(productionMetadata),
     /lifetime exceeds policy/
   );
 
   await assert.rejects(
     () => requesterForGrant({
-      expires_at: new Date(Date.now() + 60_000).toISOString()
-    })({ file_id: 'file-123', object_key: productionKey, owner_user_id: 'user_1' }),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      mime_type: 'application/pdf'
+    })(productionMetadata),
     /signed URL/
+  );
+
+  await assert.rejects(
+    () => requesterForGrant({
+      signed_url: 'https://private-storage.example/object',
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      mime_type: 'image/png'
+    })(productionMetadata),
+    /mime_type does not match attachment metadata/
+  );
+
+  await assert.rejects(
+    () => requesterForGrant({
+      signed_url: 'https://private-storage.example/object',
+      expires_at: new Date(Date.now() + 60_000).toISOString()
+    })(productionMetadata),
+    /Viewer grant mime_type is required/
   );
 
   console.log('wilpayViewerGrantClient PASS');
