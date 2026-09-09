@@ -2,6 +2,7 @@ import { assertWilpayFileMetadata, sha256WilpayFile, WILPAY_STORAGE_LIMITS } fro
 
 const HTTPS_PROTOCOL = 'https:';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+const consumedUploadGrantIds = new Map();
 
 function configuredUploadOrigins() {
   const raw = import.meta.env?.VITE_WILPAY_STORAGE_UPLOAD_ORIGINS;
@@ -62,6 +63,30 @@ function assertWilpayNewUploadNamespace(metadata) {
   return true;
 }
 
+function grantRequestId(grant) {
+  const requestId = String(grant?.request_id || '').trim();
+  if (!requestId || requestId.length > 128 || !/^[A-Za-z0-9_-]+$/.test(requestId)) {
+    throw new Error('Upload grant request_id is required');
+  }
+  return requestId;
+}
+
+function consumeWilpayUploadGrant(grant) {
+  const requestId = grantRequestId(grant);
+  const expiresAtMs = new Date(grant.expires_at).getTime();
+  const now = Date.now();
+
+  for (const [id, expiry] of consumedUploadGrantIds) {
+    if (expiry <= now) consumedUploadGrantIds.delete(id);
+  }
+
+  if (consumedUploadGrantIds.has(requestId)) {
+    throw new Error('Upload grant has already been consumed');
+  }
+
+  consumedUploadGrantIds.set(requestId, expiresAtMs);
+}
+
 export function assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOrigins } = {}) {
   if (!grant || typeof grant !== 'object') throw new Error('Upload grant is required');
   if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
@@ -119,6 +144,7 @@ export async function uploadWilpayPrivateFile({
 }) {
   assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOrigins });
   await assertWilpayUploadContent(file, metadata);
+  consumeWilpayUploadGrant(grant);
   const response = await fetchImpl(grant.upload_url, {
     method: 'PUT',
     body: file,
