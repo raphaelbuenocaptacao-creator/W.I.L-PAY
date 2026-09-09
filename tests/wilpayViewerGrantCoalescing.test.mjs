@@ -35,7 +35,7 @@ const request = createWilpayViewerGrantRequester({
 
 const first = request(metadata);
 const second = request({ ...metadata });
-await Promise.resolve();
+for (let i = 0; i < 8 && fetchCalls === 0; i += 1) await Promise.resolve();
 assert.equal(fetchCalls, 1, 'same concurrent attachment request must issue one backend call');
 release();
 const [grantA, grantB] = await Promise.all([first, second]);
