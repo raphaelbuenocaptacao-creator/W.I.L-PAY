@@ -18,7 +18,7 @@ function safeSegment(value, label) {
   return text;
 }
 
-function assertViewerObjectScope({ fileId, objectKey }) {
+function assertViewerObjectScope({ fileId, objectKey, ownerUserId }) {
   if (objectKey.includes('\\') || objectKey.includes('//') || objectKey.split('/').some(part => part === '.' || part === '..')) {
     throw new Error('Viewer object_key is outside W.I.L Pay private scope');
   }
@@ -28,7 +28,8 @@ function assertViewerObjectScope({ fileId, objectKey }) {
     if (parts.length !== 5 || parts[0] !== 'wilpay' || parts[1] !== 'production') {
       throw new Error('Viewer object_key is outside W.I.L Pay private scope');
     }
-    safeSegment(parts[2], 'viewer owner');
+    const objectOwner = safeSegment(parts[2], 'viewer owner');
+    if (objectOwner !== ownerUserId) throw new Error('Viewer object_key owner does not match attachment owner');
     if (!PRODUCTION_CATEGORIES.has(parts[3])) throw new Error('Viewer object_key category is invalid');
     if (safeSegment(parts[4], 'viewer file_id') !== fileId) {
       throw new Error('Viewer object_key does not match file_id');
@@ -41,7 +42,8 @@ function assertViewerObjectScope({ fileId, objectKey }) {
     if (parts.length !== 7 || parts[0] !== 'wilpay' || parts[1] !== 'users' || parts[3] !== 'loans') {
       throw new Error('Viewer legacy object_key is outside W.I.L Pay private scope');
     }
-    safeSegment(parts[2], 'viewer legacy owner');
+    const objectOwner = safeSegment(parts[2], 'viewer legacy owner');
+    if (objectOwner !== ownerUserId) throw new Error('Viewer legacy object_key owner does not match attachment owner');
     safeSegment(parts[4], 'viewer legacy loan');
     safeSegment(parts[5], 'viewer legacy kind');
     const filename = requiredText(parts[6], 'viewer legacy filename');
@@ -69,12 +71,18 @@ function parseViewerGrantEndpoint(value) {
   return url;
 }
 
-function assertReturnedGrantScope(grant, { fileId, objectKey }) {
+function assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId }) {
   if (grant.file_id != null && requiredText(grant.file_id, 'Viewer grant file_id') !== fileId) {
     throw new Error('Viewer grant file_id does not match request');
   }
   if (grant.object_key != null && requiredText(grant.object_key, 'Viewer grant object_key') !== objectKey) {
     throw new Error('Viewer grant object_key does not match request');
+  }
+  if (grant.owner_user_id != null && safeSegment(grant.owner_user_id, 'Viewer grant owner_user_id') !== ownerUserId) {
+    throw new Error('Viewer grant owner_user_id does not match request');
+  }
+  if (grant.auth_uid != null && safeSegment(grant.auth_uid, 'Viewer grant auth_uid') !== ownerUserId) {
+    throw new Error('Viewer grant auth_uid does not match request');
   }
   return grant;
 }
@@ -102,8 +110,9 @@ export function createWilpayViewerGrantRequester({
   return async function requestWilpayViewerGrant(metadata) {
     if (!metadata || typeof metadata !== 'object') throw new Error('Viewer grant metadata is required');
     const fileId = safeSegment(metadata.file_id, 'file_id');
+    const ownerUserId = safeSegment(metadata.owner_user_id || metadata.auth_uid, 'owner_user_id');
     const objectKey = requiredText(metadata.object_key, 'object_key');
-    assertViewerObjectScope({ fileId, objectKey });
+    assertViewerObjectScope({ fileId, objectKey, ownerUserId });
     const accessToken = requiredText(await getAccessToken(), 'W.I.L Pay access token');
 
     const response = await fetchImpl(url.toString(), {
@@ -113,7 +122,7 @@ export function createWilpayViewerGrantRequester({
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ file_id: fileId, object_key: objectKey }),
+      body: JSON.stringify({ file_id: fileId, object_key: objectKey, owner_user_id: ownerUserId }),
       credentials: 'omit',
       cache: 'no-store',
       redirect: 'error',
@@ -123,6 +132,6 @@ export function createWilpayViewerGrantRequester({
     if (!response?.ok) throw new Error(`Viewer grant request failed (${response?.status ?? 'unknown'})`);
     const grant = await response.json();
     if (!grant || typeof grant !== 'object') throw new Error('Viewer grant response is invalid');
-    return assertReturnedGrantScope(grant, { fileId, objectKey });
+    return assertReturnedGrantScope(grant, { fileId, objectKey, ownerUserId });
   };
 }
