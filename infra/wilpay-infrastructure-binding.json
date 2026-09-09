@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -12,7 +12,14 @@
     "storage_bucket": "wilpay-private-documents",
     "storage_private": true,
     "storage_provider_binding": null,
-    "approved_exclusive_storage_bindings": []
+    "approved_exclusive_storage_bindings": [],
+    "storage_layout": {
+      "root_prefix": "wilpay/production",
+      "object_key_template": "wilpay/production/{auth_uid}/{category}/{file_id}",
+      "allowed_categories": ["documents", "selfies", "receipts", "guarantees", "history"],
+      "immutable_file_id_required": true,
+      "pii_in_object_key_forbidden": true
+    }
   },
   "capacity": {
     "minimum_complete_clients": 1000
