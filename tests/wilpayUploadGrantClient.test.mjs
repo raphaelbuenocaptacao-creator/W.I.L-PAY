@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import { createWilpayUploadGrantRequester } from '../src/lib/wilpayUploadGrantClient.js';
 
+const checksum = 'a'.repeat(64);
+const payload = {
+  file_id: 'file-1',
+  owner_user_id: 'u1',
+  loan_id: 'l1',
+  document_type: 'document',
+  bucket: 'wilpay-private-documents',
+  object_key: 'wilpay/production/u1/documents/file-1',
+  content_type: 'application/pdf',
+  size_bytes: 1024,
+  checksum_sha256: checksum
+};
+
 const calls = [];
 const requester = createWilpayUploadGrantRequester({
   endpoint: 'https://api.wilpay.example/private-upload-grant',
@@ -11,7 +24,6 @@ const requester = createWilpayUploadGrantRequester({
   }
 });
 
-const payload = { file_id: 'file-1', object_key: 'users/u1/loans/l1/document/file-1.jpg' };
 const grant = await requester(payload);
 assert.equal(grant.method, 'PUT');
 assert.equal(calls.length, 1);
@@ -29,12 +41,36 @@ assert.throws(
   /must use HTTPS/
 );
 
+let blockedFetches = 0;
+const failClosedRequester = createWilpayUploadGrantRequester({
+  endpoint: 'https://api.wilpay.example/grant',
+  getAccessToken: async () => 'token',
+  fetchImpl: async () => {
+    blockedFetches += 1;
+    return { ok: true, json: async () => ({}) };
+  }
+});
+
+await assert.rejects(
+  failClosedRequester({ ...payload, object_key: 'wilpay/users/u1/loans/l1/document/file-1.pdf' }),
+  /object_key does not match owner\/category\/file scope/
+);
+await assert.rejects(
+  failClosedRequester({ ...payload, object_key: 'wilpay/production/other/documents/file-1' }),
+  /object_key does not match owner\/category\/file scope/
+);
+await assert.rejects(
+  failClosedRequester({ ...payload, document_type: 'unknown' }),
+  /Invalid document_type/
+);
+assert.equal(blockedFetches, 0, 'invalid scope must be rejected before contacting the grant backend');
+
 await assert.rejects(
   createWilpayUploadGrantRequester({
     endpoint: 'https://api.wilpay.example/grant',
     getAccessToken: async () => '',
     fetchImpl: async () => ({ ok: true, json: async () => ({}) })
-  })({ file_id: 'file-2' }),
+  })(payload),
   /access token is required/
 );
 
@@ -43,7 +79,7 @@ await assert.rejects(
     endpoint: 'https://api.wilpay.example/grant',
     getAccessToken: async () => 'token',
     fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) })
-  })({ file_id: 'file-3' }),
+  })(payload),
   /failed \(403\)/
 );
 
