@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "service": "wilpay",
   "ownership": {
     "project_slug": "wilpay",
@@ -17,7 +17,17 @@
       "image/webp",
       "application/pdf"
     ],
-    "object_key_template": "wilpay/users/{user_id}/loans/{loan_id}/{document_type}/{file_id}.{extension}",
+    "root_prefix": "wilpay/production",
+    "allowed_categories": [
+      "documents",
+      "selfies",
+      "receipts",
+      "guarantees",
+      "history"
+    ],
+    "object_key_template": "wilpay/production/{owner_user_id}/{category}/{file_id}",
+    "legacy_object_key_template": "wilpay/users/{user_id}/loans/{loan_id}/{document_type}/{file_id}.{extension}",
+    "legacy_object_keys_read_only": true,
     "direct_public_urls": false,
     "viewer_access": "short_lived_signed_url"
   },
@@ -49,6 +59,8 @@
   "migration": {
     "existing_inline_data_urls": "preserve_until_verified_storage_copy",
     "new_upload_target": "private_storage",
+    "new_upload_namespace": "wilpay/production",
+    "legacy_object_keys": "read_only_compatibility",
     "destructive_cleanup_requires_explicit_approval": true
   }
 }
