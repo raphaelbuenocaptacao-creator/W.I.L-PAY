@@ -16,13 +16,15 @@ let viewerGrantCalls = 0;
 const privateResult = await resolveWilpayAttachmentViewer({
   record: {
     file_id: 'file-123',
-    object_key: 'users/u1/loans/l1/DOCUMENTO_FOTO/file-123.jpg',
+    auth_uid: 'u1',
+    object_key: 'wilpay/production/u1/documents/file-123',
     mime_type: 'image/jpeg'
   },
-  requestViewerGrant: async ({ file_id, object_key }) => {
+  requestViewerGrant: async ({ file_id, object_key, owner_user_id }) => {
     viewerGrantCalls += 1;
     assert.equal(file_id, 'file-123');
-    assert.match(object_key, /^users\//);
+    assert.equal(owner_user_id, 'u1');
+    assert.equal(object_key, 'wilpay/production/u1/documents/file-123');
     return {
       signed_url: 'https://storage.wilpay.example/private/file-123.jpg?signature=redacted',
       expires_at: '2029-01-01T00:04:00.000Z'
