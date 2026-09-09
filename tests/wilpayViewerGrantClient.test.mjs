@@ -51,10 +51,10 @@ async function run() {
   assert.deepEqual(JSON.parse(seen.options.body), {
     file_id: 'file-123',
     object_key: productionKey,
-    owner_user_id: 'user_1'
+    owner_user_id: 'user_1',
+    mime_type: 'application/pdf'
   });
   assert.ok(!seen.options.body.includes('session-token'));
-  assert.ok(!seen.options.body.includes('application/pdf'));
 
   assert.deepEqual(audit, [
     {
@@ -130,16 +130,25 @@ async function run() {
   assert.equal(outOfScopeCalls, 0);
 
   const legacyKey = 'wilpay/users/user_1/loans/loan_1/document/file-123.pdf';
+  let legacyBody;
   const legacy = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
     getAccessToken: async () => 'session-token',
-    fetchImpl: async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ signed_url: 'https://private-storage.example/legacy', expires_at: new Date(Date.now() + 60_000).toISOString() })
-    })
+    fetchImpl: async (_url, options) => {
+      legacyBody = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ signed_url: 'https://private-storage.example/legacy', expires_at: new Date(Date.now() + 60_000).toISOString() })
+      };
+    }
   });
   await legacy({ file_id: 'file-123', object_key: legacyKey, owner_user_id: 'user_1' });
+  assert.deepEqual(legacyBody, {
+    file_id: 'file-123',
+    object_key: legacyKey,
+    owner_user_id: 'user_1'
+  });
 
   const tampered = createWilpayViewerGrantRequester({
     endpoint: 'https://storage.wilpay.example/viewer-grant',
