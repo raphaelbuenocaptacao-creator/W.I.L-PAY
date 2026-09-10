@@ -8,6 +8,11 @@ function requiredFunction(value, label) {
   return value;
 }
 
+function optionalFunction(value, label) {
+  if (value != null && typeof value !== 'function') throw new Error(`${label} must be a function`);
+  return value;
+}
+
 function normalizeRuntimeStatus(status) {
   const value = status || {};
   return Object.freeze({
@@ -20,6 +25,7 @@ function normalizeRuntimeStatus(status) {
 export async function persistWilpayAttachmentForRuntime({
   neon,
   getAccessToken,
+  auditUploadCompleted,
   authUid,
   loanId,
   docType,
@@ -28,15 +34,19 @@ export async function persistWilpayAttachmentForRuntime({
   createdAt,
   randomUUID,
   legacyPersist,
-  runtimeStatus = wilpayPrivateUploadRuntimeStatus
+  runtimeStatus = wilpayPrivateUploadRuntimeStatus,
+  persistPrivate = persistWilpayPrivateAttachmentWithSession
 }) {
   const statusProvider = requiredFunction(runtimeStatus, 'runtimeStatus');
   const status = normalizeRuntimeStatus(statusProvider());
 
   if (status.ready) {
-    const result = await persistWilpayPrivateAttachmentWithSession({
+    const persistPrivateAttachment = requiredFunction(persistPrivate, 'persistPrivate');
+    const completionAuditor = optionalFunction(auditUploadCompleted, 'auditUploadCompleted');
+    const result = await persistPrivateAttachment({
       neon,
       getAccessToken,
+      auditUploadCompleted: completionAuditor,
       authUid,
       loanId,
       docType,
