@@ -48,7 +48,7 @@ const result = await persistWilpayPrivateAttachment({
   allowedUploadOrigins: ['https://storage.example.test'],
   requestUploadGrant: async request => ({
     ...request,
-    request_id: request.request_id,
+    request_id: 'test_private_attachment_persistence_1',
     method: 'PUT',
     upload_url: 'https://storage.example.test/private-upload',
     expires_at: new Date(Date.now() + 60_000).toISOString()
