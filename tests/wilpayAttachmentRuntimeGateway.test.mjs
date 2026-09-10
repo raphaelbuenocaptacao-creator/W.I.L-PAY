@@ -91,6 +91,28 @@ assert.equal(privateArgs.loanId, 'loan-private');
 assert.equal(privateArgs.docType, 'COMPROVANTE_RENDA');
 assert.equal(privateArgs.file.name, 'comprovante.pdf');
 
+let missingAuditPrivateCalled = false;
+await assert.rejects(
+  persistWilpayAttachmentForRuntime({
+    neon: {},
+    getAccessToken: async () => 'unused',
+    authUid: 'user-private',
+    loanId: 'loan-private',
+    docType: 'DOCUMENTO_FOTO',
+    file: {},
+    runtimeStatus: () => ({
+      ready: true,
+      endpoint_configured: true,
+      upload_origins_configured: true
+    }),
+    persistPrivate: async () => {
+      missingAuditPrivateCalled = true;
+    }
+  }),
+  /auditUploadCompleted is required/
+);
+assert.equal(missingAuditPrivateCalled, false, 'private uploads must not run without completion audit');
+
 let malformedPrivateCalled = false;
 await assert.rejects(
   persistWilpayAttachmentForRuntime({
@@ -110,7 +132,7 @@ await assert.rejects(
       malformedPrivateCalled = true;
     }
   }),
-  /auditUploadCompleted must be a function/
+  /auditUploadCompleted is required/
 );
 assert.equal(malformedPrivateCalled, false, 'invalid audit hooks must fail before private persistence');
 
