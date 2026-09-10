@@ -26,6 +26,10 @@ function assertNeonClient(neon) {
   if (!neon || typeof neon.from !== 'function') throw new Error('Neon client is required');
 }
 
+function assertOptionalFunction(value, label) {
+  if (value != null && typeof value !== 'function') throw new Error(`${label} must be a function`);
+}
+
 export function wilpayStorageKindForDocType(docType) {
   const normalized = requiredText(docType, 'docType').toUpperCase();
   const kind = DOC_KIND[normalized];
@@ -40,6 +44,7 @@ export async function persistWilpayPrivateAttachment({
   docType,
   file,
   requestUploadGrant,
+  auditUploadCompleted,
   allowedUploadOrigins,
   fetchImpl,
   storageProvider = 'private',
@@ -47,6 +52,7 @@ export async function persistWilpayPrivateAttachment({
   randomUUID
 }) {
   assertNeonClient(neon);
+  assertOptionalFunction(auditUploadCompleted, 'auditUploadCompleted');
   const safeAuthUid = requiredText(authUid, 'authUid');
   const safeLoanId = requiredText(loanId, 'loanId');
   const safeDocType = requiredText(docType, 'docType').toUpperCase();
@@ -62,6 +68,7 @@ export async function persistWilpayPrivateAttachment({
     storageProvider,
     createdAt,
     requestUploadGrant,
+    auditUploadCompleted,
     allowedUploadOrigins,
     fetchImpl,
     persistFileMetadata: async metadata => {
