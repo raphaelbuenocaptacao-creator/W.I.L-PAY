@@ -5,6 +5,10 @@ function assertFunction(value, label) {
   if (typeof value !== 'function') throw new Error(`${label} is required`);
 }
 
+function assertOptionalFunction(value, label) {
+  if (value != null && typeof value !== 'function') throw new Error(`${label} must be a function`);
+}
+
 function assertMetadataOnlyPayload(metadata) {
   const forbiddenKeys = ['file', 'blob', 'bytes', 'buffer', 'base64', 'content', 'data_url', 'upload_url', 'signed_url'];
   for (const key of forbiddenKeys) {
@@ -62,11 +66,13 @@ export async function uploadWilpayFileToPrivateStorage({
   createdAt,
   requestUploadGrant,
   persistFileMetadata,
+  auditUploadCompleted,
   allowedUploadOrigins,
   fetchImpl
 }) {
   assertFunction(requestUploadGrant, 'requestUploadGrant');
   assertFunction(persistFileMetadata, 'persistFileMetadata');
+  assertOptionalFunction(auditUploadCompleted, 'auditUploadCompleted');
 
   const storageFile = wilpayFileFromCompactedInput(file);
   const prepared = await prepareWilpayPrivateUpload({
@@ -95,6 +101,28 @@ export async function uploadWilpayFileToPrivateStorage({
   // Persist metadata only after the object upload succeeds. This keeps Neon/AUREON
   // free of document binaries and avoids marking failed uploads as completed.
   const persisted = await persistFileMetadata({ ...prepared.metadata });
+
+  // Audit completion only after metadata persistence succeeds. The audit payload is
+  // metadata-only and intentionally excludes the signed URL, file body and credentials.
+  if (auditUploadCompleted) {
+    const auditEvent = Object.freeze({
+      event_type: 'private_upload_completed',
+      file_id: uploaded.file_id,
+      owner_user_id: prepared.metadata.owner_user_id,
+      loan_id: prepared.metadata.loan_id,
+      document_type: prepared.metadata.document_type,
+      storage_provider: prepared.metadata.storage_provider,
+      bucket: uploaded.bucket,
+      object_key: uploaded.object_key,
+      content_type: prepared.metadata.content_type,
+      size_bytes: prepared.metadata.size_bytes,
+      checksum_sha256: uploaded.checksum_sha256,
+      request_id: grant.request_id,
+      occurred_at: new Date().toISOString()
+    });
+    assertMetadataOnlyPayload(auditEvent);
+    await auditUploadCompleted(auditEvent);
+  }
 
   return Object.freeze({
     file_id: uploaded.file_id,
