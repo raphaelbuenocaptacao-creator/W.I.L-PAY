@@ -78,8 +78,12 @@ function assertWilpayUploadGrantPayload(payload) {
   }
 
   const sizeBytes = Number(payload.size_bytes);
-  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > WILPAY_STORAGE_LIMITS.maxBytesPerFile) {
-    throw new Error('Invalid size_bytes');
+  const maxBytesForDocumentType = Number(WILPAY_STORAGE_LIMITS.maxBytesByKind?.[documentType]);
+  if (!Number.isFinite(maxBytesForDocumentType) || maxBytesForDocumentType <= 0) {
+    throw new Error('Missing W.I.L Pay category size policy');
+  }
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > maxBytesForDocumentType) {
+    throw new Error('Invalid size_bytes for document_type');
   }
 
   const checksum = requiredText(payload.checksum_sha256, 'checksum_sha256').toLowerCase();
