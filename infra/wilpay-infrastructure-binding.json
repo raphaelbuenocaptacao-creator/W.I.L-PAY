@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -28,11 +28,28 @@
       "object_key_template": "wilpay/production/{auth_uid}/{category}/{file_id}",
       "allowed_categories": ["documents", "selfies", "receipts", "guarantees", "history"],
       "immutable_file_id_required": true,
-      "pii_in_object_key_forbidden": true
+      "pii_in_object_key_forbidden": true,
+      "write_prefix_must_match_root": true,
+      "writes_outside_root_forbidden": true
     }
   },
   "capacity": {
-    "minimum_complete_clients": 1000
+    "minimum_complete_clients": 1000,
+    "planning_budget_bytes_per_client": 268435456,
+    "minimum_planning_budget_bytes": 268435456000,
+    "max_object_bytes_by_category": {
+      "documents": 15728640,
+      "selfies": 10485760,
+      "receipts": 10485760,
+      "guarantees": 20971520,
+      "history": 15728640
+    }
+  },
+  "retention": {
+    "automatic_destructive_deletion": false,
+    "versioning_required_when_supported": true,
+    "metadata_history_required": true,
+    "lifecycle_deletion_requires_explicit_approval": true
   },
   "data_policy": {
     "database_binary_payloads": false,

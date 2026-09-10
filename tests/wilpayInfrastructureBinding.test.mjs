@@ -5,7 +5,7 @@ const raw = await readFile(new URL('../infra/wilpay-infrastructure-binding.json'
 const binding = JSON.parse(raw);
 const normalized = raw.toLowerCase();
 
-assert.equal(binding.schema_version >= 5, true);
+assert.equal(binding.schema_version >= 6, true);
 assert.equal(binding.project, 'wilpay');
 assert.equal(binding.environment, 'production');
 assert.equal(binding.isolation.exclusive, true);
@@ -13,6 +13,20 @@ assert.equal(binding.isolation.database_provider, 'neon');
 assert.equal(binding.isolation.storage_bucket, 'wilpay-private-documents');
 assert.equal(binding.isolation.storage_private, true);
 assert.equal(binding.capacity.minimum_complete_clients >= 1000, true);
+assert.equal(binding.capacity.planning_budget_bytes_per_client >= 268435456, true);
+assert.equal(
+  binding.capacity.minimum_planning_budget_bytes >= binding.capacity.minimum_complete_clients * binding.capacity.planning_budget_bytes_per_client,
+  true,
+  'storage planning budget must cover at least 1,000 complete clients'
+);
+for (const category of ['documents', 'selfies', 'receipts', 'guarantees', 'history']) {
+  assert.equal(Number.isInteger(binding.capacity.max_object_bytes_by_category[category]), true, `missing max object size for ${category}`);
+  assert.equal(binding.capacity.max_object_bytes_by_category[category] > 0, true, `invalid max object size for ${category}`);
+}
+assert.equal(binding.retention.automatic_destructive_deletion, false);
+assert.equal(binding.retention.versioning_required_when_supported, true);
+assert.equal(binding.retention.metadata_history_required, true);
+assert.equal(binding.retention.lifecycle_deletion_requires_explicit_approval, true);
 assert.equal(binding.data_policy.database_binary_payloads, false);
 assert.equal(binding.data_policy.database_stores_metadata_only, true);
 assert.equal(binding.data_policy.private_storage_required_for_new_uploads_when_bound, true);
@@ -28,6 +42,8 @@ assert.equal(layout.root_prefix, 'wilpay/production');
 assert.equal(layout.object_key_template, 'wilpay/production/{auth_uid}/{category}/{file_id}');
 assert.equal(layout.immutable_file_id_required, true);
 assert.equal(layout.pii_in_object_key_forbidden, true);
+assert.equal(layout.write_prefix_must_match_root, true);
+assert.equal(layout.writes_outside_root_forbidden, true);
 for (const category of ['documents', 'selfies', 'receipts', 'guarantees', 'history']) {
   assert.equal(layout.allowed_categories.includes(category), true, `missing storage category: ${category}`);
 }
