@@ -5,7 +5,7 @@ const raw = await readFile(new URL('../infra/wilpay-infrastructure-binding.json'
 const binding = JSON.parse(raw);
 const normalized = raw.toLowerCase();
 
-assert.equal(binding.schema_version >= 4, true);
+assert.equal(binding.schema_version >= 5, true);
 assert.equal(binding.project, 'wilpay');
 assert.equal(binding.environment, 'production');
 assert.equal(binding.isolation.exclusive, true);
@@ -16,6 +16,12 @@ assert.equal(binding.capacity.minimum_complete_clients >= 1000, true);
 assert.equal(binding.data_policy.database_binary_payloads, false);
 assert.equal(binding.data_policy.database_stores_metadata_only, true);
 assert.equal(binding.data_policy.private_storage_required_for_new_uploads_when_bound, true);
+
+const storageIdentityLock = binding.isolation.storage_identity_lock;
+assert.equal(storageIdentityLock.immutable_after_approval, true);
+assert.equal(storageIdentityLock.provider_identity_required, true);
+assert.equal(storageIdentityLock.resource_identity_required, true);
+assert.equal(storageIdentityLock.bucket_name_immutable, true);
 
 const layout = binding.isolation.storage_layout;
 assert.equal(layout.root_prefix, 'wilpay/production');
@@ -35,9 +41,11 @@ for (const forbidden of ['captapro', 'gamificacao']) {
 
 const approvedDatabaseProjects = binding.isolation.approved_exclusive_database_project_ids;
 const approvedDatabaseOrgs = binding.isolation.approved_exclusive_database_org_ids;
+const approvedStorageResources = binding.isolation.approved_exclusive_storage_resource_ids;
 const approvedStorageBindings = binding.isolation.approved_exclusive_storage_bindings;
 assert.equal(Array.isArray(approvedDatabaseProjects), true);
 assert.equal(Array.isArray(approvedDatabaseOrgs), true);
+assert.equal(Array.isArray(approvedStorageResources), true);
 assert.equal(Array.isArray(approvedStorageBindings), true);
 
 if (binding.isolation.database_project_id) {
@@ -56,7 +64,21 @@ if (binding.isolation.database_org_id) {
   );
 }
 
-if (binding.isolation.storage_provider_binding) {
+const anyStorageBindingField = Boolean(
+  binding.isolation.storage_provider ||
+  binding.isolation.storage_resource_id ||
+  binding.isolation.storage_provider_binding
+);
+
+if (anyStorageBindingField) {
+  assert.equal(Boolean(binding.isolation.storage_provider), true, 'storage_provider is required once Storage binding starts');
+  assert.equal(Boolean(binding.isolation.storage_resource_id), true, 'storage_resource_id is required once Storage binding starts');
+  assert.equal(Boolean(binding.isolation.storage_provider_binding), true, 'storage_provider_binding is required once Storage binding starts');
+  assert.equal(
+    approvedStorageResources.includes(binding.isolation.storage_resource_id),
+    true,
+    'storage_resource_id must be explicitly approved for exclusive W.I.L Pay use'
+  );
   assert.equal(
     approvedStorageBindings.includes(binding.isolation.storage_provider_binding),
     true,
@@ -65,7 +87,11 @@ if (binding.isolation.storage_provider_binding) {
 }
 
 const databaseBound = Boolean(binding.isolation.database_project_id && binding.isolation.database_org_id);
-const storageBound = Boolean(binding.isolation.storage_provider_binding);
+const storageBound = Boolean(
+  binding.isolation.storage_provider &&
+  binding.isolation.storage_resource_id &&
+  binding.isolation.storage_provider_binding
+);
 const databaseProjectApproved = Boolean(
   binding.isolation.database_project_id &&
   approvedDatabaseProjects.includes(binding.isolation.database_project_id)
@@ -74,22 +100,28 @@ const databaseOrgApproved = Boolean(
   binding.isolation.database_org_id &&
   approvedDatabaseOrgs.includes(binding.isolation.database_org_id)
 );
+const storageResourceApproved = Boolean(
+  binding.isolation.storage_resource_id &&
+  approvedStorageResources.includes(binding.isolation.storage_resource_id)
+);
 const storageApproved = Boolean(
   binding.isolation.storage_provider_binding &&
   approvedStorageBindings.includes(binding.isolation.storage_provider_binding)
 );
 const externallyBound = databaseBound && storageBound;
-const productionReady = externallyBound && databaseProjectApproved && databaseOrgApproved && storageApproved;
+const productionReady = externallyBound && databaseProjectApproved && databaseOrgApproved && storageResourceApproved && storageApproved;
 
 if (!productionReady) {
   assert.equal(
     binding.readiness.status,
     'BLOCKED_EXTERNAL_BINDING',
-    'production must remain fail-closed until exclusive Neon project/org and private Storage bindings are complete and explicitly approved'
+    'production must remain fail-closed until exclusive Neon project/org and immutable private Storage identity are complete and explicitly approved'
   );
   for (const requirement of [
     'exclusive_neon_project_id',
     'exclusive_neon_org_id',
+    'private_storage_provider_identity',
+    'private_storage_resource_id',
     'private_storage_provider_binding',
     'explicit_resource_approval'
   ]) {
@@ -108,9 +140,12 @@ for (const forbiddenProject of binding.isolation.forbidden_shared_projects) {
   for (const candidate of [
     binding.isolation.database_project_id,
     binding.isolation.database_org_id,
+    binding.isolation.storage_provider,
+    binding.isolation.storage_resource_id,
     binding.isolation.storage_provider_binding,
     ...approvedDatabaseProjects,
     ...approvedDatabaseOrgs,
+    ...approvedStorageResources,
     ...approvedStorageBindings
   ].filter(Boolean)) {
     assert.equal(
