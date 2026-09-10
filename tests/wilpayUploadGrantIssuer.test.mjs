@@ -16,6 +16,7 @@ const payload = {
 };
 
 let order = [];
+let auditEvent = null;
 const grant = await issueWilpaySignedUploadGrant(payload, {
   authenticatedUserId: 'user_123',
   consumeGrantNonce: async () => {
@@ -35,13 +36,25 @@ const grant = await issueWilpaySignedUploadGrant(payload, {
       expires_at: new Date(nowMs + 5 * 60 * 1000).toISOString()
     };
   },
+  auditGrantIssued: async (event) => {
+    order.push('audit');
+    auditEvent = event;
+  },
   now: () => nowMs
 });
 
-assert.deepEqual(order, ['consume', 'sign']);
+assert.deepEqual(order, ['consume', 'sign', 'audit']);
 assert.equal(grant.request_id, payload.request_id);
 assert.equal(grant.object_key, payload.object_key);
 assert.equal('secret' in grant, false);
+assert.equal(auditEvent.event_type, 'private_upload_grant_issued');
+assert.equal(auditEvent.request_id, payload.request_id);
+assert.equal(auditEvent.file_id, payload.file_id);
+assert.equal(auditEvent.size_bytes, payload.size_bytes);
+for (const forbidden of ['upload_url', 'signed_url', 'service_role', 'token', 'secret', 'file_data', 'base64', 'blob']) {
+  assert.equal(forbidden in auditEvent, false, `audit event must not include ${forbidden}`);
+}
+assert.equal(Object.isFrozen(auditEvent), true);
 
 let signCalls = 0;
 await assert.rejects(
