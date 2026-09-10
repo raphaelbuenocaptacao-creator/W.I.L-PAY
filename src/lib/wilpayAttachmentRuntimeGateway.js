@@ -8,11 +8,6 @@ function requiredFunction(value, label) {
   return value;
 }
 
-function optionalFunction(value, label) {
-  if (value != null && typeof value !== 'function') throw new Error(`${label} must be a function`);
-  return value;
-}
-
 function normalizeRuntimeStatus(status) {
   const value = status || {};
   return Object.freeze({
@@ -42,7 +37,10 @@ export async function persistWilpayAttachmentForRuntime({
 
   if (status.ready) {
     const persistPrivateAttachment = requiredFunction(persistPrivate, 'persistPrivate');
-    const completionAuditor = optionalFunction(auditUploadCompleted, 'auditUploadCompleted');
+    // A ready private-storage runtime must never accept unaudited uploads.
+    // Requiring the completion auditor here prevents a partially wired backend
+    // from silently storing private client documents without an append-only trail.
+    const completionAuditor = requiredFunction(auditUploadCompleted, 'auditUploadCompleted');
     const result = await persistPrivateAttachment({
       neon,
       getAccessToken,
