@@ -9,6 +9,11 @@ function requiredFunction(value, label) {
   return value;
 }
 
+function optionalFunction(value, label) {
+  if (value != null && typeof value !== 'function') throw new Error(`${label} must be a function`);
+  return value;
+}
+
 function configuredUploadOrigins() {
   return String(import.meta.env?.VITE_WILPAY_STORAGE_UPLOAD_ORIGINS || '')
     .split(',')
@@ -29,6 +34,7 @@ export function wilpayPrivateUploadRuntimeStatus() {
 export async function persistWilpayPrivateAttachmentWithSession({
   neon,
   getAccessToken,
+  auditUploadCompleted,
   authUid,
   loanId,
   docType,
@@ -46,6 +52,7 @@ export async function persistWilpayPrivateAttachmentWithSession({
   }
 
   const tokenProvider = requiredFunction(getAccessToken, 'getAccessToken');
+  const completionAuditor = optionalFunction(auditUploadCompleted, 'auditUploadCompleted');
   const requestUploadGrant = createWilpayUploadGrantRequester({
     getAccessToken: tokenProvider,
     fetchImpl
@@ -58,6 +65,8 @@ export async function persistWilpayPrivateAttachmentWithSession({
     docType,
     file,
     requestUploadGrant,
+    auditUploadCompleted: completionAuditor,
+    allowedUploadOrigins: configuredUploadOrigins(),
     fetchImpl,
     createdAt,
     randomUUID
