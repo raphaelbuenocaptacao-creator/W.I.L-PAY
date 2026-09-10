@@ -14,6 +14,13 @@ const STORAGE_CATEGORIES = Object.freeze({
   guarantee: 'guarantees',
   history: 'history'
 });
+const MAX_BYTES_BY_KIND = Object.freeze({
+  document: 15 * 1024 * 1024,
+  selfie: 10 * 1024 * 1024,
+  receipt: 10 * 1024 * 1024,
+  guarantee: 20 * 1024 * 1024,
+  history: 15 * 1024 * 1024
+});
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
@@ -35,6 +42,11 @@ function normalizeKind(kind) {
   const canonicalKind = KIND_ALIASES[safeKind] ?? safeKind;
   if (!ALLOWED_KINDS.has(canonicalKind)) throw new Error('Invalid kind');
   return canonicalKind;
+}
+
+function maxBytesForKind(kind) {
+  const canonicalKind = normalizeKind(kind);
+  return MAX_BYTES_BY_KIND[canonicalKind];
 }
 
 function extensionForMime(mimeType) {
@@ -80,8 +92,8 @@ export function validateWilpayUpload(file, { maxBytes = DEFAULT_MAX_BYTES } = {}
   return { size, mimeType, extension: extensionForMime(mimeType) };
 }
 
-export async function sha256WilpayFile(file) {
-  validateWilpayUpload(file);
+export async function sha256WilpayFile(file, { maxBytes = DEFAULT_MAX_BYTES } = {}) {
+  validateWilpayUpload(file, { maxBytes });
   if (typeof file.arrayBuffer !== 'function') throw new Error('File content is not readable');
   if (!globalThis.crypto?.subtle) throw new Error('Secure SHA-256 is unavailable');
   const bytes = await file.arrayBuffer();
@@ -98,11 +110,14 @@ export async function prepareWilpayPrivateUpload({
   storageProvider,
   createdAt
 }) {
-  const checksumSha256 = await sha256WilpayFile(file);
+  const canonicalKind = normalizeKind(kind);
+  const maxBytes = maxBytesForKind(canonicalKind);
+  validateWilpayUpload(file, { maxBytes });
+  const checksumSha256 = await sha256WilpayFile(file, { maxBytes });
   const metadata = buildWilpayFileMetadata({
     userId,
     loanId,
-    kind,
+    kind: canonicalKind,
     fileId,
     file,
     checksumSha256,
@@ -136,9 +151,9 @@ export function buildWilpayFileMetadata({
   storageProvider,
   createdAt
 }) {
-  const { size, mimeType } = validateWilpayUpload(file);
-  const safeProvider = safeSegment(storageProvider, 'storageProvider');
   const canonicalKind = normalizeKind(kind);
+  const { size, mimeType } = validateWilpayUpload(file, { maxBytes: maxBytesForKind(canonicalKind) });
+  const safeProvider = safeSegment(storageProvider, 'storageProvider');
   const objectKey = buildWilpayObjectKey({ userId, loanId, kind: canonicalKind, fileId, mimeType });
   return {
     file_id: safeSegment(fileId, 'fileId'),
@@ -184,7 +199,8 @@ export function assertWilpayFileMetadata(metadata) {
     throw new Error('Metadata object_key does not match owner/loan scope');
   }
   const size = Number(metadata.size_bytes);
-  if (!Number.isFinite(size) || size <= 0 || size > DEFAULT_MAX_BYTES) throw new Error('Metadata size is not allowed');
+  const maxBytes = maxBytesForKind(canonicalDocumentType);
+  if (!Number.isFinite(size) || size <= 0 || size > maxBytes) throw new Error('Metadata size is not allowed');
   normalizeChecksum(metadata.checksum_sha256, { required: true });
   normalizeCreatedAt(metadata.created_at);
   return true;
@@ -192,6 +208,7 @@ export function assertWilpayFileMetadata(metadata) {
 
 export const WILPAY_STORAGE_LIMITS = Object.freeze({
   maxBytesPerFile: DEFAULT_MAX_BYTES,
+  maxBytesByKind: MAX_BYTES_BY_KIND,
   bucket: STORAGE_BUCKET,
   rootPrefix: STORAGE_ROOT_PREFIX,
   allowedKinds: Object.freeze([...ALLOWED_KINDS]),

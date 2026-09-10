@@ -27,6 +27,13 @@ assert.deepEqual(
   [...WILPAY_STORAGE_LIMITS.allowedCategories].sort(),
   ['documents', 'guarantees', 'history', 'receipts', 'selfies'].sort()
 );
+assert.deepEqual(WILPAY_STORAGE_LIMITS.maxBytesByKind, {
+  document: 15 * 1024 * 1024,
+  selfie: 10 * 1024 * 1024,
+  receipt: 10 * 1024 * 1024,
+  guarantee: 20 * 1024 * 1024,
+  history: 15 * 1024 * 1024
+});
 
 const metadata = buildWilpayFileMetadata({
   userId: 'user_123',
@@ -95,6 +102,18 @@ assert.equal(prepared.metadata.object_key, 'wilpay/production/user_123/documents
 assert.equal(Object.isFrozen(prepared), true);
 assert.equal(Object.isFrozen(prepared.metadata), true);
 assert.equal('data_url' in prepared.metadata, false);
+
+const elevenMiB = 11 * 1024 * 1024;
+const sixteenMiB = 16 * 1024 * 1024;
+const oversizedSelfie = { size: elevenMiB, type: 'image/jpeg' };
+const oversizedReceipt = { size: elevenMiB, type: 'application/pdf' };
+const allowedGuarantee = { size: sixteenMiB, type: 'image/jpeg' };
+assert.throws(() => buildWilpayFileMetadata({ userId: 'user', loanId: 'loan', kind: 'selfie', fileId: 'selfie_big', file: oversizedSelfie, checksumSha256: checksum, storageProvider: 'private_storage' }), /size/i);
+assert.throws(() => buildWilpayFileMetadata({ userId: 'user', loanId: 'loan', kind: 'receipt', fileId: 'receipt_big', file: oversizedReceipt, checksumSha256: checksum, storageProvider: 'private_storage' }), /size/i);
+const guaranteeMetadata = buildWilpayFileMetadata({ userId: 'user', loanId: 'loan', kind: 'guarantee', fileId: 'guarantee_ok', file: allowedGuarantee, checksumSha256: checksum, storageProvider: 'private_storage' });
+assert.equal(guaranteeMetadata.size_bytes, sixteenMiB);
+assert.equal(assertWilpayFileMetadata(guaranteeMetadata), true);
+assert.throws(() => assertWilpayFileMetadata({ ...metadata, document_type: 'selfie', kind: 'selfie', object_key: 'wilpay/production/user_123/selfies/file_789', size_bytes: elevenMiB }), /size/i);
 
 assert.throws(() => validateWilpayUpload({ size: 10, type: 'text/html' }), /type/i);
 assert.throws(() => buildWilpayObjectKey({ userId: '../escape', loanId: 'loan', kind: 'document', fileId: 'file', mimeType: 'application/pdf' }), /userId/);
