@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -12,8 +12,17 @@
     "approved_exclusive_database_org_ids": [],
     "storage_bucket": "wilpay-private-documents",
     "storage_private": true,
+    "storage_provider": null,
+    "storage_resource_id": null,
     "storage_provider_binding": null,
+    "approved_exclusive_storage_resource_ids": [],
     "approved_exclusive_storage_bindings": [],
+    "storage_identity_lock": {
+      "immutable_after_approval": true,
+      "provider_identity_required": true,
+      "resource_identity_required": true,
+      "bucket_name_immutable": true
+    },
     "storage_layout": {
       "root_prefix": "wilpay/production",
       "object_key_template": "wilpay/production/{auth_uid}/{category}/{file_id}",
@@ -35,6 +44,8 @@
     "requires": [
       "exclusive_neon_project_id",
       "exclusive_neon_org_id",
+      "private_storage_provider_identity",
+      "private_storage_resource_id",
       "private_storage_provider_binding",
       "explicit_resource_approval"
     ]
