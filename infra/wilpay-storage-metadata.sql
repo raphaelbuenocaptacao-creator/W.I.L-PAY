@@ -14,13 +14,24 @@ CREATE TABLE IF NOT EXISTS wilpay.private_files (
   bucket text NOT NULL DEFAULT 'wilpay-private-documents' CHECK (bucket = 'wilpay-private-documents'),
   object_key text NOT NULL UNIQUE,
   content_type text NOT NULL CHECK (content_type IN ('application/pdf','image/jpeg','image/png','image/webp')),
-  size_bytes bigint NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 15728640),
+  size_bytes bigint NOT NULL,
   checksum_sha256 text NOT NULL CHECK (checksum_sha256 ~ '^[a-f0-9]{64}$'),
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('pending','active','quarantined','archived')),
   created_at timestamptz NOT NULL DEFAULT now(),
   uploaded_at timestamptz,
   archived_at timestamptz,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT wilpay_private_files_category_size CHECK (
+    size_bytes > 0
+    AND size_bytes <= CASE document_type
+      WHEN 'selfie' THEN 10485760
+      WHEN 'receipt' THEN 10485760
+      WHEN 'document' THEN 15728640
+      WHEN 'history' THEN 15728640
+      WHEN 'guarantee' THEN 20971520
+      ELSE 0
+    END
+  ),
   CONSTRAINT wilpay_object_key_scope CHECK (object_key LIKE 'wilpay/users/%/loans/%'),
   CONSTRAINT wilpay_object_key_owner_loan_scope CHECK (
     owner_user_id <> ''
