@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -9,6 +9,7 @@
     "database_project_id": null,
     "database_org_id": null,
     "approved_exclusive_database_project_ids": [],
+    "approved_exclusive_database_org_ids": [],
     "storage_bucket": "wilpay-private-documents",
     "storage_private": true,
     "storage_provider_binding": null,
