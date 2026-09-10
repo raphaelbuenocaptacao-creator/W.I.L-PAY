@@ -54,15 +54,55 @@ if (binding.isolation.storage_provider_binding) {
   );
 }
 
-const externallyBound = Boolean(
+const databaseBound = Boolean(binding.isolation.database_project_id && binding.isolation.database_org_id);
+const storageBound = Boolean(binding.isolation.storage_provider_binding);
+const databaseApproved = Boolean(
   binding.isolation.database_project_id &&
-  binding.isolation.database_org_id &&
-  binding.isolation.storage_provider_binding
+  approvedDatabaseProjects.includes(binding.isolation.database_project_id)
 );
+const storageApproved = Boolean(
+  binding.isolation.storage_provider_binding &&
+  approvedStorageBindings.includes(binding.isolation.storage_provider_binding)
+);
+const externallyBound = databaseBound && storageBound;
+const productionReady = externallyBound && databaseApproved && storageApproved;
 
-if (!externallyBound) {
-  assert.equal(binding.readiness.status, 'BLOCKED_EXTERNAL_BINDING');
-  assert.equal(binding.readiness.requires.includes('explicit_resource_approval'), true);
+if (!productionReady) {
+  assert.equal(
+    binding.readiness.status,
+    'BLOCKED_EXTERNAL_BINDING',
+    'production must remain fail-closed until exclusive Neon and private Storage bindings are complete and explicitly approved'
+  );
+  for (const requirement of [
+    'exclusive_neon_project_id',
+    'exclusive_neon_org_id',
+    'private_storage_provider_binding',
+    'explicit_resource_approval'
+  ]) {
+    assert.equal(binding.readiness.requires.includes(requirement), true, `missing readiness requirement: ${requirement}`);
+  }
+} else {
+  assert.notEqual(
+    binding.readiness.status,
+    'BLOCKED_EXTERNAL_BINDING',
+    'a fully approved exclusive binding should move to an explicit ready state'
+  );
+}
+
+for (const forbiddenProject of binding.isolation.forbidden_shared_projects) {
+  const token = String(forbiddenProject).toLowerCase();
+  for (const candidate of [
+    binding.isolation.database_project_id,
+    binding.isolation.storage_provider_binding,
+    ...approvedDatabaseProjects,
+    ...approvedStorageBindings
+  ].filter(Boolean)) {
+    assert.equal(
+      String(candidate).toLowerCase().includes(token),
+      false,
+      `exclusive binding must never reference forbidden shared project: ${forbiddenProject}`
+    );
+  }
 }
 
 for (const secretLike of ['service_role', 'password', 'access_token', 'refresh_token', 'secret_key', 'private_key']) {
