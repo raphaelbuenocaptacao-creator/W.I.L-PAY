@@ -62,4 +62,56 @@ await assert.rejects(
   /legacyPersist is required/
 );
 
+const completionAudit = async () => ({ ok: true });
+let privateArgs;
+const privateResult = await persistWilpayAttachmentForRuntime({
+  neon: { kind: 'metadata-only-client' },
+  getAccessToken: async () => 'access-token',
+  auditUploadCompleted: completionAudit,
+  authUid: 'user-private',
+  loanId: 'loan-private',
+  docType: 'COMPROVANTE_RENDA',
+  file: { name: 'comprovante.pdf' },
+  runtimeStatus: () => ({
+    ready: true,
+    endpoint_configured: true,
+    upload_origins_configured: true
+  }),
+  persistPrivate: async args => {
+    privateArgs = args;
+    return { file_id: 'file-private' };
+  }
+});
+
+assert.equal(privateResult.mode, 'private');
+assert.deepEqual(privateResult.result, { file_id: 'file-private' });
+assert.equal(privateArgs.auditUploadCompleted, completionAudit);
+assert.equal(privateArgs.authUid, 'user-private');
+assert.equal(privateArgs.loanId, 'loan-private');
+assert.equal(privateArgs.docType, 'COMPROVANTE_RENDA');
+assert.equal(privateArgs.file.name, 'comprovante.pdf');
+
+let malformedPrivateCalled = false;
+await assert.rejects(
+  persistWilpayAttachmentForRuntime({
+    neon: {},
+    getAccessToken: async () => 'unused',
+    auditUploadCompleted: 'not-a-function',
+    authUid: 'user-private',
+    loanId: 'loan-private',
+    docType: 'DOCUMENTO_FOTO',
+    file: {},
+    runtimeStatus: () => ({
+      ready: true,
+      endpoint_configured: true,
+      upload_origins_configured: true
+    }),
+    persistPrivate: async () => {
+      malformedPrivateCalled = true;
+    }
+  }),
+  /auditUploadCompleted must be a function/
+);
+assert.equal(malformedPrivateCalled, false, 'invalid audit hooks must fail before private persistence');
+
 console.log('wilpayAttachmentRuntimeGateway tests passed');
