@@ -18,6 +18,13 @@ approved.isolation.database_project_id = 'project-wilpay-exclusive';
 approved.isolation.database_org_id = 'org-wilpay-exclusive';
 approved.isolation.approved_exclusive_database_project_ids = ['project-wilpay-exclusive'];
 approved.isolation.approved_exclusive_database_org_ids = ['org-wilpay-exclusive'];
+approved.isolation.database_observed_identity = {
+  project_name: 'wilpay-production',
+  region_id: 'us-east-2',
+  branch_name: 'production',
+  database_name: 'wilpay',
+  role_name: 'wilpay_app'
+};
 approved.isolation.storage_provider = 'private-storage-provider';
 approved.isolation.storage_resource_id = 'storage-wilpay-exclusive';
 approved.isolation.storage_provider_binding = 'binding-wilpay-production';
@@ -30,9 +37,23 @@ approved.readiness.approval.evidence_ref = 'approval-record-001';
 approved.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(approved);
 
 const ready = evaluateWilpayInfrastructureReadiness(approved);
-assert.equal(ready.ready, true, 'fully allowlisted and fingerprinted resources must pass the gate');
+assert.equal(ready.ready, true, 'fully allowlisted, identity-matched and fingerprinted resources must pass the gate');
 assert.equal(ready.status, 'READY');
 assert.deepEqual(ready.reasons, []);
+
+const missingObservedIdentity = structuredClone(approved);
+delete missingObservedIdentity.isolation.database_observed_identity;
+missingObservedIdentity.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(missingObservedIdentity);
+const missingIdentity = evaluateWilpayInfrastructureReadiness(missingObservedIdentity);
+assert.equal(missingIdentity.ready, false, 'readiness must fail closed without observed Neon identity');
+assert.equal(missingIdentity.reasons.includes('database_identity_unverified'), true);
+
+const mismatchedObservedIdentity = structuredClone(approved);
+mismatchedObservedIdentity.isolation.database_observed_identity.region_id = 'eu-central-1';
+mismatchedObservedIdentity.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(mismatchedObservedIdentity);
+const identityMismatch = evaluateWilpayInfrastructureReadiness(mismatchedObservedIdentity);
+assert.equal(identityMismatch.ready, false, 'observed Neon identity must match the locked production identity');
+assert.equal(identityMismatch.reasons.includes('database_identity_mismatch'), true);
 
 const replacedStorage = structuredClone(approved);
 replacedStorage.isolation.storage_resource_id = 'storage-silently-replaced';
