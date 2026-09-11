@@ -173,3 +173,68 @@ export function createWilpayPrivateRuntimeReadiness({
     reasons: Object.freeze(reasons)
   });
 }
+
+const CLIENT_EXPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
+  'VITE_WILPAY_NEON_PROJECT_NAME',
+  'VITE_WILPAY_NEON_REGION_ID',
+  'VITE_WILPAY_NEON_BRANCH_NAME',
+  'VITE_WILPAY_NEON_DATABASE_NAME',
+  'VITE_WILPAY_NEON_ROLE_NAME',
+  'VITE_WILPAY_STORAGE_PROVIDER',
+  'VITE_WILPAY_STORAGE_RESOURCE_ID',
+  'VITE_WILPAY_STORAGE_PROVIDER_BINDING',
+  'VITE_WILPAY_STORAGE_BUCKET',
+  'VITE_WILPAY_STORAGE_ROOT_PREFIX',
+  'VITE_WILPAY_PRIVATE_STORAGE_ENDPOINT_CONFIGURED',
+  'VITE_WILPAY_UPLOAD_ORIGINS_CONFIGURED'
+]);
+
+function parseServerBooleanFlag(env, key) {
+  const raw = env[key];
+  if (raw === 'true') return { value: true, valid: true };
+  if (raw === 'false') return { value: false, valid: true };
+  return { value: false, valid: false };
+}
+
+export function createWilpayServerRuntimeReadiness({ binding, env }) {
+  const serverEnv = env && typeof env === 'object' && !Array.isArray(env) ? env : {};
+  const environmentValid = serverEnv === env;
+  const clientExposedInfrastructure = CLIENT_EXPOSED_INFRASTRUCTURE_KEYS.some((key) => present(serverEnv[key]));
+  const endpointFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED');
+  const uploadOriginsFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED');
+
+  const base = createWilpayPrivateRuntimeReadiness({
+    binding,
+    observedDatabaseIdentity: {
+      project_name: serverEnv.WILPAY_SERVER_NEON_PROJECT_NAME,
+      region_id: serverEnv.WILPAY_SERVER_NEON_REGION_ID,
+      branch_name: serverEnv.WILPAY_SERVER_NEON_BRANCH_NAME,
+      database_name: serverEnv.WILPAY_SERVER_NEON_DATABASE_NAME,
+      role_name: serverEnv.WILPAY_SERVER_NEON_ROLE_NAME
+    },
+    observedStorageIdentity: {
+      provider: serverEnv.WILPAY_SERVER_STORAGE_PROVIDER,
+      resource_id: serverEnv.WILPAY_SERVER_STORAGE_RESOURCE_ID,
+      provider_binding: serverEnv.WILPAY_SERVER_STORAGE_PROVIDER_BINDING,
+      bucket: serverEnv.WILPAY_SERVER_STORAGE_BUCKET,
+      root_prefix: serverEnv.WILPAY_SERVER_STORAGE_ROOT_PREFIX
+    },
+    transportStatus: {
+      endpoint_configured: endpointFlag.value,
+      upload_origins_configured: uploadOriginsFlag.value
+    }
+  });
+
+  const reasons = [...base.reasons];
+  if (!environmentValid) reasons.push('server_environment_invalid');
+  if (clientExposedInfrastructure) reasons.push('client_exposed_infrastructure_configuration');
+  if (!endpointFlag.valid || !uploadOriginsFlag.valid) reasons.push('server_transport_flag_invalid');
+
+  const ready = base.ready && reasons.length === 0;
+  return Object.freeze({
+    ...base,
+    ready,
+    status: ready ? 'READY' : 'BLOCKED_EXTERNAL_BINDING',
+    reasons: Object.freeze(reasons)
+  });
+}
