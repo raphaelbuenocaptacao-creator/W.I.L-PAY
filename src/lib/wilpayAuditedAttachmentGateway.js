@@ -28,16 +28,17 @@ function assertNoRequestCapabilityInjection(input) {
 /**
  * Server-side composition boundary for W.I.L Pay attachment persistence.
  *
- * The database query function is injected only here and converted into the
- * narrow auditUploadCompleted capability expected by the upload gateway.
- * Callers never receive the query function and cannot replace mandatory
- * server capabilities through per-request input.
+ * Database access and infrastructure readiness are injected only here as
+ * narrow server capabilities. Request-controlled data cannot replace either
+ * capability or choose the persistence mode.
  */
 export function createWilpayAuditedAttachmentGateway({
   query,
+  runtimeStatus,
   persistAttachment = persistWilpayAttachmentForRuntime
 } = {}) {
   const gateway = requiredFunction(persistAttachment, 'persistAttachment');
+  const trustedRuntimeStatus = requiredFunction(runtimeStatus, 'runtimeStatus');
   const { auditUploadCompleted } = createWilpayUploadCompletedAuditRuntime({ query });
 
   async function persistAttachmentWithAudit(input = {}) {
@@ -52,7 +53,8 @@ export function createWilpayAuditedAttachmentGateway({
 
     return gateway({
       ...input,
-      auditUploadCompleted
+      auditUploadCompleted,
+      runtimeStatus: trustedRuntimeStatus
     });
   }
 
