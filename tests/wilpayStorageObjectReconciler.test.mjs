@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { reconcileWilpayStorageObject } from '../src/lib/wilpayStorageObjectReconciler.js';
+import { reconcileWilpayStorageObjectFromStat } from '../src/lib/wilpayStorageObjectStatAdapter.js';
 
 const metadata = {
   storage_provider: 'private-provider',
@@ -57,6 +58,40 @@ assert.throws(
     verifiedAt: '2026-09-11T15:59:59.000Z'
   }),
   /verifiedAt must not precede uploaded_at/
+);
+
+let statRequest;
+const statEvidence = await reconcileWilpayStorageObjectFromStat({
+  metadata,
+  statObject: async (request) => {
+    statRequest = request;
+    return {
+      exists: true,
+      size_bytes: 1024,
+      checksum_sha256: 'a'.repeat(64)
+    };
+  },
+  verifiedAt: '2026-09-11T16:06:00.000Z'
+});
+
+assert.deepEqual(statRequest, {
+  storage_provider: metadata.storage_provider,
+  bucket: metadata.bucket,
+  object_key: metadata.object_key
+});
+assert.deepEqual(statEvidence, {
+  storage_verified_at: '2026-09-11T16:06:00.000Z',
+  storage_verified_size_bytes: 1024,
+  storage_verified_checksum_sha256: 'a'.repeat(64)
+});
+
+await assert.rejects(
+  () => reconcileWilpayStorageObjectFromStat({
+    metadata,
+    statObject: async () => ({ exists: true, size_bytes: 999, checksum_sha256: 'a'.repeat(64) }),
+    verifiedAt: '2026-09-11T16:06:00.000Z'
+  }),
+  /Storage object reconciliation failed/
 );
 
 console.log('W.I.L Pay storage object reconciler tests passed');
