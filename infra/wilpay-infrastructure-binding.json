@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -67,6 +67,13 @@
   },
   "readiness": {
     "status": "BLOCKED_EXTERNAL_BINDING",
+    "approval": {
+      "status": "PENDING",
+      "approved_by": null,
+      "approved_at": null,
+      "evidence_ref": null,
+      "resource_fingerprint": null
+    },
     "requires": [
       "exclusive_neon_project_id",
       "exclusive_neon_org_id",
