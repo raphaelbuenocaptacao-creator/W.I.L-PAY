@@ -92,7 +92,11 @@ for (const capability of [
   'runtimeStatus',
   'persistPrivate',
   'legacyPersist',
-  'persistAttachment'
+  'persistAttachment',
+  'binding',
+  'observedDatabaseIdentity',
+  'observedStorageIdentity',
+  'transportStatus'
 ]) {
   await assert.rejects(
     () => runtime.persistAttachment({
