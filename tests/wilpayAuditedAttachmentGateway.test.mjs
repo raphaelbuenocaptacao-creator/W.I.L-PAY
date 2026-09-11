@@ -3,6 +3,7 @@ import { createWilpayAuditedAttachmentGateway } from '../src/lib/wilpayAuditedAt
 
 const dbCalls = [];
 let gatewayInput;
+let gatewayCalls = 0;
 
 const runtime = createWilpayAuditedAttachmentGateway({
   query: async (sql, params) => {
@@ -10,25 +11,21 @@ const runtime = createWilpayAuditedAttachmentGateway({
     return { rowCount: 1 };
   },
   persistAttachment: async (input) => {
+    gatewayCalls += 1;
     gatewayInput = input;
     return { mode: 'private', result: { ok: true } };
   }
 });
 
-const attackerAuditor = async () => {
-  throw new Error('request auditor must never be used');
-};
-
 const result = await runtime.persistAttachment({
   authUid: 'user-456',
   loanId: 'loan-789',
-  docType: 'document',
-  auditUploadCompleted: attackerAuditor
+  docType: 'document'
 });
 
 assert.equal(result.mode, 'private');
+assert.equal(gatewayCalls, 1);
 assert.equal(typeof gatewayInput.auditUploadCompleted, 'function');
-assert.notEqual(gatewayInput.auditUploadCompleted, attackerAuditor);
 assert.equal(Object.hasOwn(runtime, 'query'), false, 'query must never be exposed by the runtime');
 
 await gatewayInput.auditUploadCompleted({
@@ -71,6 +68,26 @@ await assert.rejects(
   /forbidden sensitive fields/
 );
 assert.equal(dbCalls.length, 1, 'unsafe audit payload must not reach the database');
+
+for (const capability of [
+  'query',
+  'auditUploadCompleted',
+  'runtimeStatus',
+  'persistPrivate',
+  'legacyPersist',
+  'persistAttachment'
+]) {
+  await assert.rejects(
+    () => runtime.persistAttachment({
+      authUid: 'user-456',
+      loanId: 'loan-789',
+      docType: 'document',
+      [capability]: async () => ({})
+    }),
+    /forbidden server capability fields/
+  );
+}
+assert.equal(gatewayCalls, 1, 'capability injection must be rejected before persistence');
 
 assert.throws(
   () => createWilpayAuditedAttachmentGateway({ persistAttachment: async () => ({}) }),
