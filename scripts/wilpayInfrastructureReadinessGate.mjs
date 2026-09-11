@@ -19,6 +19,24 @@ function approvalIsComplete(approval) {
   );
 }
 
+function databaseIdentityStatus(isolation) {
+  const expected = isolation.database_identity_lock ?? {};
+  const observed = isolation.database_observed_identity;
+  const identityKeys = ['project_name', 'region_id', 'branch_name', 'database_name', 'role_name'];
+
+  if (!observed || typeof observed !== 'object') {
+    return 'unverified';
+  }
+
+  const complete = identityKeys.every((key) => present(observed[key]) && present(expected[key]));
+  if (!complete) {
+    return 'unverified';
+  }
+
+  const matches = identityKeys.every((key) => observed[key].trim() === expected[key].trim());
+  return matches ? 'verified' : 'mismatch';
+}
+
 export function evaluateWilpayInfrastructureReadiness(binding) {
   if (!binding || typeof binding !== 'object') {
     throw new TypeError('W.I.L Pay readiness gate requires an infrastructure binding object');
@@ -31,11 +49,20 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
   const databaseComplete = present(isolation.database_project_id) && present(isolation.database_org_id);
   if (!databaseComplete) {
     reasons.push('database_binding_incomplete');
-  } else if (
-    !allowlisted(isolation.approved_exclusive_database_project_ids, isolation.database_project_id) ||
-    !allowlisted(isolation.approved_exclusive_database_org_ids, isolation.database_org_id)
-  ) {
-    reasons.push('database_binding_not_allowlisted');
+  } else {
+    if (
+      !allowlisted(isolation.approved_exclusive_database_project_ids, isolation.database_project_id) ||
+      !allowlisted(isolation.approved_exclusive_database_org_ids, isolation.database_org_id)
+    ) {
+      reasons.push('database_binding_not_allowlisted');
+    }
+
+    const identityStatus = databaseIdentityStatus(isolation);
+    if (identityStatus === 'unverified') {
+      reasons.push('database_identity_unverified');
+    } else if (identityStatus === 'mismatch') {
+      reasons.push('database_identity_mismatch');
+    }
   }
 
   const storageComplete =
