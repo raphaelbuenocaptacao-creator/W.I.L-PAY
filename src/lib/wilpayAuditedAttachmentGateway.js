@@ -1,5 +1,6 @@
 import { persistWilpayAttachmentForRuntime } from './wilpayAttachmentRuntimeGateway.js';
 import { createWilpayUploadCompletedAuditRuntime } from './wilpayUploadCompletedAuditRuntime.js';
+import { createWilpayPrivateRuntimeReadiness } from '../../scripts/wilpayInfrastructureReadinessGate.mjs';
 
 function requiredFunction(value, label) {
   if (typeof value !== 'function') throw new Error(`${label} is required`);
@@ -60,5 +61,35 @@ export function createWilpayAuditedAttachmentGateway({
 
   return Object.freeze({
     persistAttachment: persistAttachmentWithAudit
+  });
+}
+
+/**
+ * Builds the only server-side attachment runtime that may choose private
+ * Storage. Readiness is derived once from the exclusive infrastructure binding
+ * and the identities observed by the backend, then captured as an immutable
+ * capability before any request data is accepted.
+ */
+export function createWilpayExclusiveAttachmentRuntime({
+  query,
+  binding,
+  observedDatabaseIdentity,
+  observedStorageIdentity,
+  transportStatus,
+  persistAttachment
+} = {}) {
+  const readiness = createWilpayPrivateRuntimeReadiness({
+    binding,
+    observedDatabaseIdentity,
+    observedStorageIdentity,
+    transportStatus
+  });
+
+  const runtimeStatus = () => readiness;
+
+  return createWilpayAuditedAttachmentGateway({
+    query,
+    runtimeStatus,
+    persistAttachment
   });
 }
