@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -10,6 +10,15 @@
     "database_org_id": null,
     "approved_exclusive_database_project_ids": [],
     "approved_exclusive_database_org_ids": [],
+    "database_identity_lock": {
+      "immutable_after_approval": true,
+      "project_name": "wilpay-production",
+      "region_id": "us-east-2",
+      "branch_name": "production",
+      "database_name": "wilpay",
+      "role_name": "wilpay_app",
+      "reject_identity_mismatch": true
+    },
     "storage_bucket": "wilpay-private-documents",
     "storage_private": true,
     "storage_provider": null,
