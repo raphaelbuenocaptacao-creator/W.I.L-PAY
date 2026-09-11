@@ -157,8 +157,8 @@ export function createWilpayPrivateRuntimeReadiness({
   };
 
   const infrastructure = evaluateWilpayInfrastructureReadiness(runtimeBinding);
-  const endpointConfigured = Boolean(transportStatus?.endpoint_configured);
-  const uploadOriginsConfigured = Boolean(transportStatus?.upload_origins_configured);
+  const endpointConfigured = transportStatus?.endpoint_configured === true;
+  const uploadOriginsConfigured = transportStatus?.upload_origins_configured === true;
   const reasons = [...infrastructure.reasons];
 
   if (!endpointConfigured) reasons.push('private_storage_endpoint_not_configured');
