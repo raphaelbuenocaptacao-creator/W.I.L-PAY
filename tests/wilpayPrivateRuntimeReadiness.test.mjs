@@ -105,4 +105,46 @@ assert.equal(stringFalseTransport.upload_origins_configured, false);
 assert.ok(stringFalseTransport.reasons.includes('private_storage_endpoint_not_configured'));
 assert.ok(stringFalseTransport.reasons.includes('upload_origins_not_configured'));
 
+assert.equal(
+  typeof readinessModule.createWilpayServerRuntimeReadiness,
+  'function',
+  'server runtime must derive infrastructure readiness only from server-scoped configuration'
+);
+
+const serverEnv = {
+  WILPAY_SERVER_NEON_PROJECT_NAME: 'wilpay-production',
+  WILPAY_SERVER_NEON_REGION_ID: 'us-east-2',
+  WILPAY_SERVER_NEON_BRANCH_NAME: 'production',
+  WILPAY_SERVER_NEON_DATABASE_NAME: 'wilpay',
+  WILPAY_SERVER_NEON_ROLE_NAME: 'wilpay_app',
+  WILPAY_SERVER_STORAGE_PROVIDER: 'private-object-storage',
+  WILPAY_SERVER_STORAGE_RESOURCE_ID: 'wilpay-storage-resource',
+  WILPAY_SERVER_STORAGE_PROVIDER_BINDING: 'wilpay-storage-binding',
+  WILPAY_SERVER_STORAGE_BUCKET: 'wilpay-private-documents',
+  WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
+  WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
+  WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
+};
+
+const serverReady = readinessModule.createWilpayServerRuntimeReadiness({ binding, env: serverEnv });
+assert.equal(serverReady.ready, true);
+assert.equal(serverReady.endpoint_configured, true);
+assert.equal(serverReady.upload_origins_configured, true);
+assert.deepEqual(serverReady.reasons, []);
+
+const clientExposedConfig = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, VITE_WILPAY_STORAGE_RESOURCE_ID: 'client-visible-storage' }
+});
+assert.equal(clientExposedConfig.ready, false);
+assert.ok(clientExposedConfig.reasons.includes('client_exposed_infrastructure_configuration'));
+
+const malformedServerFlag = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'TRUE' }
+});
+assert.equal(malformedServerFlag.ready, false);
+assert.equal(malformedServerFlag.endpoint_configured, false);
+assert.ok(malformedServerFlag.reasons.includes('server_transport_flag_invalid'));
+
 console.log('W.I.L Pay private runtime readiness tests passed');
