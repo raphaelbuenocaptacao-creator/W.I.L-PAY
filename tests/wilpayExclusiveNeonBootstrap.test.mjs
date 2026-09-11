@@ -3,7 +3,26 @@ import { readFile } from 'node:fs/promises';
 
 const raw = await readFile(new URL('../infra/wilpay-exclusive-neon-bootstrap.json', import.meta.url), 'utf8');
 const manifest = JSON.parse(raw);
-const normalized = raw.toLowerCase();
+
+function collectStringValues(value, strings = []) {
+  if (typeof value === 'string') {
+    strings.push(value.toLowerCase());
+    return strings;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, strings);
+    return strings;
+  }
+
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) collectStringValues(item, strings);
+  }
+
+  return strings;
+}
+
+const normalizedValues = collectStringValues(manifest);
 
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.project, 'wilpay');
@@ -60,7 +79,11 @@ for (const forbiddenSecretToken of [
   'private_key',
   'password'
 ]) {
-  assert.equal(normalized.includes(forbiddenSecretToken), false, `bootstrap manifest must not contain secret material: ${forbiddenSecretToken}`);
+  assert.equal(
+    normalizedValues.some((value) => value.includes(forbiddenSecretToken)),
+    false,
+    `bootstrap manifest values must not contain secret material: ${forbiddenSecretToken}`
+  );
 }
 
 console.log('W.I.L Pay exclusive Neon bootstrap checks: PASS');
