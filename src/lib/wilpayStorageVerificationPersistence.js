@@ -30,8 +30,8 @@ function requiredTimestamp(value, label) {
  *
  * `query` must be bound to the exclusive W.I.L Pay database connection. This adapter
  * accepts no credentials and persists only verification metadata. The UPDATE is
- * intentionally conditional so a concurrent lifecycle/checksum change or duplicate
- * verifier cannot overwrite a newer file state.
+ * intentionally conditional so a concurrent lifecycle, object-identity, size or
+ * checksum change cannot cause stale verification evidence to be persisted.
  */
 export function createWilpayStorageVerificationPersistence({ query } = {}) {
   if (typeof query !== 'function') {
@@ -48,6 +48,10 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
       raw.expected_checksum_sha256,
       'verification expected_checksum_sha256'
     );
+    const expectedProvider = requiredText(raw.expected_storage_provider, 'verification expected_storage_provider');
+    const expectedBucket = requiredText(raw.expected_bucket, 'verification expected_bucket');
+    const expectedObjectKey = requiredText(raw.expected_object_key, 'verification expected_object_key');
+    const expectedSize = requiredPositiveInteger(raw.expected_size_bytes, 'verification expected_size_bytes');
 
     const evidence = raw.evidence;
     if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
@@ -67,6 +71,9 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
     if (verifiedChecksum !== expectedChecksum) {
       throw new Error('verification evidence checksum does not match expected checksum');
     }
+    if (verifiedSize !== expectedSize) {
+      throw new Error('verification evidence size does not match expected size');
+    }
 
     const sql = `UPDATE wilpay.file_metadata
       SET storage_verified_at = $3::timestamptz,
@@ -75,14 +82,22 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
       WHERE file_id = $1
         AND status = 'active'
         AND checksum_sha256 = $2
-        AND storage_verified_at IS NULL`;
+        AND storage_verified_at IS NULL
+        AND storage_provider = $6
+        AND bucket = $7
+        AND object_key = $8
+        AND size_bytes = $9`;
 
     const params = Object.freeze([
       fileId,
       expectedChecksum,
       verifiedAt,
       verifiedSize,
-      verifiedChecksum
+      verifiedChecksum,
+      expectedProvider,
+      expectedBucket,
+      expectedObjectKey,
+      expectedSize
     ]);
 
     const result = await query(sql, params);
