@@ -136,3 +136,40 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
     reasons
   };
 }
+
+export function createWilpayPrivateRuntimeReadiness({
+  binding,
+  observedDatabaseIdentity,
+  observedStorageIdentity,
+  transportStatus = {}
+}) {
+  if (!binding || typeof binding !== 'object') {
+    throw new TypeError('W.I.L Pay private runtime readiness requires an infrastructure binding object');
+  }
+
+  const runtimeBinding = {
+    ...binding,
+    isolation: {
+      ...(binding.isolation ?? {}),
+      database_observed_identity: observedDatabaseIdentity,
+      storage_observed_identity: observedStorageIdentity
+    }
+  };
+
+  const infrastructure = evaluateWilpayInfrastructureReadiness(runtimeBinding);
+  const endpointConfigured = Boolean(transportStatus?.endpoint_configured);
+  const uploadOriginsConfigured = Boolean(transportStatus?.upload_origins_configured);
+  const reasons = [...infrastructure.reasons];
+
+  if (!endpointConfigured) reasons.push('private_storage_endpoint_not_configured');
+  if (!uploadOriginsConfigured) reasons.push('upload_origins_not_configured');
+
+  const ready = infrastructure.ready && endpointConfigured && uploadOriginsConfigured;
+  return Object.freeze({
+    ready,
+    status: ready ? 'READY' : 'BLOCKED_EXTERNAL_BINDING',
+    endpoint_configured: endpointConfigured,
+    upload_origins_configured: uploadOriginsConfigured,
+    reasons: Object.freeze(reasons)
+  });
+}
