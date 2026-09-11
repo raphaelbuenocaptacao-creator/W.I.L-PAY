@@ -4,8 +4,10 @@ import { readFile } from 'node:fs/promises';
 const raw = await readFile(new URL('../infra/wilpay-infrastructure-binding.json', import.meta.url), 'utf8');
 const binding = JSON.parse(raw);
 const normalized = raw.toLowerCase();
+const bootstrapRaw = await readFile(new URL('../infra/wilpay-exclusive-neon-bootstrap.json', import.meta.url), 'utf8');
+const bootstrap = JSON.parse(bootstrapRaw);
 
-assert.equal(binding.schema_version >= 6, true);
+assert.equal(binding.schema_version >= 7, true);
 assert.equal(binding.project, 'wilpay');
 assert.equal(binding.environment, 'production');
 assert.equal(binding.isolation.exclusive, true);
@@ -30,6 +32,16 @@ assert.equal(binding.retention.lifecycle_deletion_requires_explicit_approval, tr
 assert.equal(binding.data_policy.database_binary_payloads, false);
 assert.equal(binding.data_policy.database_stores_metadata_only, true);
 assert.equal(binding.data_policy.private_storage_required_for_new_uploads_when_bound, true);
+
+const databaseIdentityLock = binding.isolation.database_identity_lock;
+assert.equal(Boolean(databaseIdentityLock), true, 'exclusive Neon identity lock is required');
+assert.equal(databaseIdentityLock.immutable_after_approval, true);
+assert.equal(databaseIdentityLock.project_name, bootstrap.database.project_name);
+assert.equal(databaseIdentityLock.branch_name, bootstrap.database.branch_name);
+assert.equal(databaseIdentityLock.database_name, bootstrap.database.database_name);
+assert.equal(databaseIdentityLock.role_name, bootstrap.database.role_name);
+assert.equal(databaseIdentityLock.region_id, bootstrap.database.region_id);
+assert.equal(databaseIdentityLock.reject_identity_mismatch, true);
 
 const storageIdentityLock = binding.isolation.storage_identity_lock;
 assert.equal(storageIdentityLock.immutable_after_approval, true);
@@ -159,6 +171,7 @@ for (const forbiddenProject of binding.isolation.forbidden_shared_projects) {
     binding.isolation.storage_provider,
     binding.isolation.storage_resource_id,
     binding.isolation.storage_provider_binding,
+    databaseIdentityLock?.project_name,
     ...approvedDatabaseProjects,
     ...approvedDatabaseOrgs,
     ...approvedStorageResources,
