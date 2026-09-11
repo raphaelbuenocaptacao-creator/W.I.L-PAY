@@ -1,26 +1,106 @@
 -- W.I.L Pay private storage client completeness telemetry.
 -- Additive/non-destructive and metadata-only: helps validate operational readiness
 -- for at least 1,000 complete clients without reading file contents or signed URLs.
--- A category only satisfies operational completeness when its stored object is active;
--- quarantined/archived objects remain in capacity totals but cannot make a client complete.
+-- A category only satisfies operational completeness when its stored object is active
+-- and a trusted Storage reconciliation confirms the same size/checksum after upload.
 
 CREATE OR REPLACE VIEW wilpay.storage_client_completeness AS
 SELECT
   owner_user_id,
   count(*) FILTER (WHERE uploaded_at IS NOT NULL) AS uploaded_file_count,
-  count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'document' AND status = 'active') AS document_count,
-  count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'selfie' AND status = 'active') AS selfie_count,
-  count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'receipt' AND status = 'active') AS receipt_count,
-  count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'guarantee' AND status = 'active') AS guarantee_count,
-  count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'history' AND status = 'active') AS history_count,
+  count(*) FILTER (
+    WHERE uploaded_at IS NOT NULL
+      AND document_type = 'document'
+      AND status = 'active'
+      AND storage_verified_at IS NOT NULL
+      AND storage_verified_at >= uploaded_at
+      AND storage_verified_size_bytes = size_bytes
+      AND storage_verified_checksum_sha256 = checksum_sha256
+  ) AS document_count,
+  count(*) FILTER (
+    WHERE uploaded_at IS NOT NULL
+      AND document_type = 'selfie'
+      AND status = 'active'
+      AND storage_verified_at IS NOT NULL
+      AND storage_verified_at >= uploaded_at
+      AND storage_verified_size_bytes = size_bytes
+      AND storage_verified_checksum_sha256 = checksum_sha256
+  ) AS selfie_count,
+  count(*) FILTER (
+    WHERE uploaded_at IS NOT NULL
+      AND document_type = 'receipt'
+      AND status = 'active'
+      AND storage_verified_at IS NOT NULL
+      AND storage_verified_at >= uploaded_at
+      AND storage_verified_size_bytes = size_bytes
+      AND storage_verified_checksum_sha256 = checksum_sha256
+  ) AS receipt_count,
+  count(*) FILTER (
+    WHERE uploaded_at IS NOT NULL
+      AND document_type = 'guarantee'
+      AND status = 'active'
+      AND storage_verified_at IS NOT NULL
+      AND storage_verified_at >= uploaded_at
+      AND storage_verified_size_bytes = size_bytes
+      AND storage_verified_checksum_sha256 = checksum_sha256
+  ) AS guarantee_count,
+  count(*) FILTER (
+    WHERE uploaded_at IS NOT NULL
+      AND document_type = 'history'
+      AND status = 'active'
+      AND storage_verified_at IS NOT NULL
+      AND storage_verified_at >= uploaded_at
+      AND storage_verified_size_bytes = size_bytes
+      AND storage_verified_checksum_sha256 = checksum_sha256
+  ) AS history_count,
   coalesce(sum(size_bytes) FILTER (WHERE uploaded_at IS NOT NULL), 0)::bigint AS uploaded_bytes,
   bool_and(uploaded_at IS NOT NULL OR status = 'pending') AS lifecycle_known,
   (
-    count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'document' AND status = 'active') > 0
-    AND count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'selfie' AND status = 'active') > 0
-    AND count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'receipt' AND status = 'active') > 0
-    AND count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'guarantee' AND status = 'active') > 0
-    AND count(*) FILTER (WHERE uploaded_at IS NOT NULL AND document_type = 'history' AND status = 'active') > 0
+    count(*) FILTER (
+      WHERE uploaded_at IS NOT NULL
+        AND document_type = 'document'
+        AND status = 'active'
+        AND storage_verified_at IS NOT NULL
+        AND storage_verified_at >= uploaded_at
+        AND storage_verified_size_bytes = size_bytes
+        AND storage_verified_checksum_sha256 = checksum_sha256
+    ) > 0
+    AND count(*) FILTER (
+      WHERE uploaded_at IS NOT NULL
+        AND document_type = 'selfie'
+        AND status = 'active'
+        AND storage_verified_at IS NOT NULL
+        AND storage_verified_at >= uploaded_at
+        AND storage_verified_size_bytes = size_bytes
+        AND storage_verified_checksum_sha256 = checksum_sha256
+    ) > 0
+    AND count(*) FILTER (
+      WHERE uploaded_at IS NOT NULL
+        AND document_type = 'receipt'
+        AND status = 'active'
+        AND storage_verified_at IS NOT NULL
+        AND storage_verified_at >= uploaded_at
+        AND storage_verified_size_bytes = size_bytes
+        AND storage_verified_checksum_sha256 = checksum_sha256
+    ) > 0
+    AND count(*) FILTER (
+      WHERE uploaded_at IS NOT NULL
+        AND document_type = 'guarantee'
+        AND status = 'active'
+        AND storage_verified_at IS NOT NULL
+        AND storage_verified_at >= uploaded_at
+        AND storage_verified_size_bytes = size_bytes
+        AND storage_verified_checksum_sha256 = checksum_sha256
+    ) > 0
+    AND count(*) FILTER (
+      WHERE uploaded_at IS NOT NULL
+        AND document_type = 'history'
+        AND status = 'active'
+        AND storage_verified_at IS NOT NULL
+        AND storage_verified_at >= uploaded_at
+        AND storage_verified_size_bytes = size_bytes
+        AND storage_verified_checksum_sha256 = checksum_sha256
+    ) > 0
   ) AS storage_profile_complete
 FROM wilpay.private_files
 GROUP BY owner_user_id;
@@ -43,6 +123,6 @@ REVOKE ALL ON wilpay.storage_client_completeness FROM PUBLIC;
 REVOKE ALL ON wilpay.storage_client_readiness_summary FROM PUBLIC;
 
 COMMENT ON VIEW wilpay.storage_client_completeness IS
-  'Metadata-only W.I.L Pay storage coverage per client across active document, selfie, receipt, guarantee and history categories.';
+  'Metadata-only W.I.L Pay storage coverage per client across active and server-reconciled document, selfie, receipt, guarantee and history categories.';
 COMMENT ON VIEW wilpay.storage_client_readiness_summary IS
-  'Private readiness telemetry toward 1,000 clients with all five W.I.L Pay storage categories represented by active objects; does not imply provider quota availability.';
+  'Private readiness telemetry toward 1,000 clients with all five W.I.L Pay storage categories represented by active, reconciled objects; does not imply provider quota availability.';
