@@ -30,6 +30,13 @@ approved.isolation.storage_resource_id = 'storage-wilpay-exclusive';
 approved.isolation.storage_provider_binding = 'binding-wilpay-production';
 approved.isolation.approved_exclusive_storage_resource_ids = ['storage-wilpay-exclusive'];
 approved.isolation.approved_exclusive_storage_bindings = ['binding-wilpay-production'];
+approved.isolation.storage_observed_identity = {
+  provider: 'private-storage-provider',
+  resource_id: 'storage-wilpay-exclusive',
+  provider_binding: 'binding-wilpay-production',
+  bucket: 'wilpay-private-documents',
+  root_prefix: 'wilpay/production'
+};
 approved.readiness.approval.status = 'APPROVED';
 approved.readiness.approval.approved_by = 'infrastructure-owner';
 approved.readiness.approval.approved_at = '2026-09-11T06:00:00.000Z';
@@ -54,6 +61,20 @@ mismatchedObservedIdentity.readiness.approval.resource_fingerprint = computeWilp
 const identityMismatch = evaluateWilpayInfrastructureReadiness(mismatchedObservedIdentity);
 assert.equal(identityMismatch.ready, false, 'observed Neon identity must match the locked production identity');
 assert.equal(identityMismatch.reasons.includes('database_identity_mismatch'), true);
+
+const missingObservedStorage = structuredClone(approved);
+delete missingObservedStorage.isolation.storage_observed_identity;
+missingObservedStorage.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(missingObservedStorage);
+const missingStorageIdentity = evaluateWilpayInfrastructureReadiness(missingObservedStorage);
+assert.equal(missingStorageIdentity.ready, false, 'readiness must fail closed without observed private Storage identity');
+assert.equal(missingStorageIdentity.reasons.includes('storage_identity_unverified'), true);
+
+const mismatchedObservedStorage = structuredClone(approved);
+mismatchedObservedStorage.isolation.storage_observed_identity.bucket = 'shared-or-replaced-bucket';
+mismatchedObservedStorage.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(mismatchedObservedStorage);
+const storageIdentityMismatch = evaluateWilpayInfrastructureReadiness(mismatchedObservedStorage);
+assert.equal(storageIdentityMismatch.ready, false, 'observed Storage identity must match the locked W.I.L Pay binding');
+assert.equal(storageIdentityMismatch.reasons.includes('storage_identity_mismatch'), true);
 
 const replacedStorage = structuredClone(approved);
 replacedStorage.isolation.storage_resource_id = 'storage-silently-replaced';
