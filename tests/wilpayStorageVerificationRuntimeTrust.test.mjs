@@ -49,6 +49,21 @@ assert.deepEqual(statRequest, {
   object_key: trustedMetadata.object_key
 });
 assert.match(calls[1].sql, /^UPDATE\b/i);
+assert.match(calls[1].sql, /storage_provider = \$6/i);
+assert.match(calls[1].sql, /bucket = \$7/i);
+assert.match(calls[1].sql, /object_key = \$8/i);
+assert.match(calls[1].sql, /size_bytes = \$9/i);
+assert.deepEqual(calls[1].params, [
+  'file_1',
+  trustedMetadata.checksum_sha256,
+  '2026-09-11T16:07:00.000Z',
+  trustedMetadata.size_bytes,
+  trustedMetadata.checksum_sha256,
+  trustedMetadata.storage_provider,
+  trustedMetadata.bucket,
+  trustedMetadata.object_key,
+  trustedMetadata.size_bytes
+]);
 
 await assert.rejects(
   () => verifyStorageObject({ file_id: 'file_1', metadata: trustedMetadata }),
