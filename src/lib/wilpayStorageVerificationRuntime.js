@@ -8,12 +8,58 @@ function requiredText(value, label) {
   return value.trim();
 }
 
+function assertFileIdOnlyRequest(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('W.I.L Pay storage verification request is required');
+  }
+
+  const keys = Object.keys(raw);
+  if (keys.length !== 1 || keys[0] !== 'file_id') {
+    throw new Error('W.I.L Pay storage verification request must contain only file_id');
+  }
+
+  return requiredText(raw.file_id, 'verification file_id');
+}
+
+async function loadTrustedMetadata(query, fileId) {
+  const sql = `SELECT storage_provider,
+      bucket,
+      object_key,
+      size_bytes,
+      checksum_sha256,
+      uploaded_at
+    FROM wilpay.file_metadata
+    WHERE file_id = $1
+      AND status = 'active'
+      AND storage_verified_at IS NULL
+    LIMIT 1`;
+
+  const result = await query(sql, Object.freeze([fileId]));
+  if (!result || result.rowCount !== 1 || !Array.isArray(result.rows) || result.rows.length !== 1) {
+    throw new Error('W.I.L Pay verification metadata is unavailable or no longer eligible');
+  }
+
+  const metadata = result.rows[0];
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    throw new Error('W.I.L Pay verification metadata is invalid');
+  }
+
+  return Object.freeze({
+    storage_provider: metadata.storage_provider,
+    bucket: metadata.bucket,
+    object_key: metadata.object_key,
+    size_bytes: metadata.size_bytes,
+    checksum_sha256: metadata.checksum_sha256,
+    uploaded_at: metadata.uploaded_at
+  });
+}
+
 /**
  * Composes the trusted W.I.L Pay verification path:
- * storage stat -> object reconciliation -> guarded database persistence.
+ * database-owned metadata -> storage stat -> object reconciliation -> guarded persistence.
  *
- * This module is server-only. Callers provide trusted infrastructure adapters;
- * request payloads never provide a prebuilt verification evidence object.
+ * This module is server-only. The caller supplies only file_id; object identity,
+ * checksum, size and upload time are loaded from the exclusive W.I.L Pay database.
  */
 export function createWilpayStorageVerificationRuntime({ statObject, query, now = () => new Date() } = {}) {
   if (typeof statObject !== 'function') {
@@ -29,15 +75,8 @@ export function createWilpayStorageVerificationRuntime({ statObject, query, now 
   const persistVerification = createWilpayStorageVerificationPersistence({ query });
 
   return async function verifyWilpayStorageObject(raw) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      throw new Error('W.I.L Pay storage verification request is required');
-    }
-
-    const fileId = requiredText(raw.file_id, 'verification file_id');
-    const metadata = raw.metadata;
-    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
-      throw new Error('verification metadata is required');
-    }
+    const fileId = assertFileIdOnlyRequest(raw);
+    const metadata = await loadTrustedMetadata(query, fileId);
 
     const evidence = await reconcileWilpayStorageObjectFromStat({
       metadata,
