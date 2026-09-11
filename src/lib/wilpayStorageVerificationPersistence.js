@@ -30,8 +30,8 @@ function requiredTimestamp(value, label) {
  *
  * `query` must be bound to the exclusive W.I.L Pay database connection. This adapter
  * accepts no credentials and persists only verification metadata. The UPDATE is
- * intentionally conditional so a concurrent lifecycle, object-identity, size or
- * checksum change cannot cause stale verification evidence to be persisted.
+ * intentionally conditional so a concurrent lifecycle, upload-version, object-identity,
+ * size or checksum change cannot cause stale verification evidence to be persisted.
  */
 export function createWilpayStorageVerificationPersistence({ query } = {}) {
   if (typeof query !== 'function') {
@@ -52,6 +52,7 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
     const expectedBucket = requiredText(raw.expected_bucket, 'verification expected_bucket');
     const expectedObjectKey = requiredText(raw.expected_object_key, 'verification expected_object_key');
     const expectedSize = requiredPositiveInteger(raw.expected_size_bytes, 'verification expected_size_bytes');
+    const expectedUploadedAt = requiredTimestamp(raw.expected_uploaded_at, 'verification expected_uploaded_at');
 
     const evidence = raw.evidence;
     if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
@@ -86,7 +87,8 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
         AND storage_provider = $6
         AND bucket = $7
         AND object_key = $8
-        AND size_bytes = $9`;
+        AND size_bytes = $9
+        AND uploaded_at = $10::timestamptz`;
 
     const params = Object.freeze([
       fileId,
@@ -97,7 +99,8 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
       expectedProvider,
       expectedBucket,
       expectedObjectKey,
-      expectedSize
+      expectedSize,
+      expectedUploadedAt
     ]);
 
     const result = await query(sql, params);

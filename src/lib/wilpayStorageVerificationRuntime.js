@@ -91,6 +91,7 @@ export function createWilpayStorageVerificationRuntime({ statObject, query, now 
       expected_bucket: metadata.bucket,
       expected_object_key: metadata.object_key,
       expected_size_bytes: metadata.size_bytes,
+      expected_uploaded_at: metadata.uploaded_at,
       evidence
     });
   };
