@@ -87,6 +87,10 @@ export function createWilpayStorageVerificationRuntime({ statObject, query, now 
     return persistVerification({
       file_id: fileId,
       expected_checksum_sha256: metadata.checksum_sha256,
+      expected_storage_provider: metadata.storage_provider,
+      expected_bucket: metadata.bucket,
+      expected_object_key: metadata.object_key,
+      expected_size_bytes: metadata.size_bytes,
       evidence
     });
   };
