@@ -4,12 +4,19 @@ import { createWilpayAuditedAttachmentGateway } from '../src/lib/wilpayAuditedAt
 const dbCalls = [];
 let gatewayInput;
 let gatewayCalls = 0;
+const trustedRuntimeStatus = () => Object.freeze({
+  ready: false,
+  status: 'BLOCKED_EXTERNAL_BINDING',
+  endpoint_configured: false,
+  upload_origins_configured: false
+});
 
 const runtime = createWilpayAuditedAttachmentGateway({
   query: async (sql, params) => {
     dbCalls.push({ sql, params });
     return { rowCount: 1 };
   },
+  runtimeStatus: trustedRuntimeStatus,
   persistAttachment: async (input) => {
     gatewayCalls += 1;
     gatewayInput = input;
@@ -26,7 +33,9 @@ const result = await runtime.persistAttachment({
 assert.equal(result.mode, 'private');
 assert.equal(gatewayCalls, 1);
 assert.equal(typeof gatewayInput.auditUploadCompleted, 'function');
+assert.equal(gatewayInput.runtimeStatus, trustedRuntimeStatus, 'trusted runtime status must be injected by server composition');
 assert.equal(Object.hasOwn(runtime, 'query'), false, 'query must never be exposed by the runtime');
+assert.equal(Object.hasOwn(runtime, 'runtimeStatus'), false, 'runtime status capability must never be exposed by the runtime');
 
 await gatewayInput.auditUploadCompleted({
   event_type: 'private_upload_completed',
@@ -90,13 +99,28 @@ for (const capability of [
 assert.equal(gatewayCalls, 1, 'capability injection must be rejected before persistence');
 
 assert.throws(
-  () => createWilpayAuditedAttachmentGateway({ persistAttachment: async () => ({}) }),
+  () => createWilpayAuditedAttachmentGateway({
+    runtimeStatus: trustedRuntimeStatus,
+    persistAttachment: async () => ({})
+  }),
   /Exclusive W\.I\.L Pay audit query function is required/
 );
 
 assert.throws(
-  () => createWilpayAuditedAttachmentGateway({ query: async () => ({}), persistAttachment: null }),
+  () => createWilpayAuditedAttachmentGateway({
+    query: async () => ({}),
+    runtimeStatus: trustedRuntimeStatus,
+    persistAttachment: null
+  }),
   /persistAttachment is required/
+);
+
+assert.throws(
+  () => createWilpayAuditedAttachmentGateway({
+    query: async () => ({}),
+    persistAttachment: async () => ({})
+  }),
+  /runtimeStatus is required/
 );
 
 console.log('PASS wilpayAuditedAttachmentGateway');
