@@ -37,6 +37,30 @@ function databaseIdentityStatus(isolation) {
   return matches ? 'verified' : 'mismatch';
 }
 
+function storageIdentityStatus(isolation) {
+  const observed = isolation.storage_observed_identity;
+  if (!observed || typeof observed !== 'object') {
+    return 'unverified';
+  }
+
+  const expected = {
+    provider: isolation.storage_provider,
+    resource_id: isolation.storage_resource_id,
+    provider_binding: isolation.storage_provider_binding,
+    bucket: isolation.storage_bucket,
+    root_prefix: isolation.storage_layout?.root_prefix
+  };
+
+  const identityKeys = ['provider', 'resource_id', 'provider_binding', 'bucket', 'root_prefix'];
+  const complete = identityKeys.every((key) => present(observed[key]) && present(expected[key]));
+  if (!complete) {
+    return 'unverified';
+  }
+
+  const matches = identityKeys.every((key) => observed[key].trim() === expected[key].trim());
+  return matches ? 'verified' : 'mismatch';
+}
+
 export function evaluateWilpayInfrastructureReadiness(binding) {
   if (!binding || typeof binding !== 'object') {
     throw new TypeError('W.I.L Pay readiness gate requires an infrastructure binding object');
@@ -71,11 +95,20 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
     present(isolation.storage_provider_binding);
   if (!storageComplete) {
     reasons.push('storage_binding_incomplete');
-  } else if (
-    !allowlisted(isolation.approved_exclusive_storage_resource_ids, isolation.storage_resource_id) ||
-    !allowlisted(isolation.approved_exclusive_storage_bindings, isolation.storage_provider_binding)
-  ) {
-    reasons.push('storage_binding_not_allowlisted');
+  } else {
+    if (
+      !allowlisted(isolation.approved_exclusive_storage_resource_ids, isolation.storage_resource_id) ||
+      !allowlisted(isolation.approved_exclusive_storage_bindings, isolation.storage_provider_binding)
+    ) {
+      reasons.push('storage_binding_not_allowlisted');
+    }
+
+    const identityStatus = storageIdentityStatus(isolation);
+    if (identityStatus === 'unverified') {
+      reasons.push('storage_identity_unverified');
+    } else if (identityStatus === 'mismatch') {
+      reasons.push('storage_identity_mismatch');
+    }
   }
 
   const approvalComplete = approvalIsComplete(approval);
