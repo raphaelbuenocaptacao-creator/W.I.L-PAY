@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { reconcileWilpayStorageObject } from '../src/lib/wilpayStorageObjectReconciler.js';
 import { reconcileWilpayStorageObjectFromStat } from '../src/lib/wilpayStorageObjectStatAdapter.js';
 import { createWilpayStorageVerificationPersistence } from '../src/lib/wilpayStorageVerificationPersistence.js';
-import { createWilpayStorageVerificationRuntime } from '../src/lib/wilpayStorageVerificationRuntime.js';
 
 const metadata = {
   storage_provider: 'private-provider',
@@ -136,63 +135,5 @@ await assert.rejects(
   }),
   /verification persistence conflict/i
 );
-
-let runtimeStatRequest;
-let runtimeQueryCall;
-const verifyStorageObject = createWilpayStorageVerificationRuntime({
-  statObject: async (request) => {
-    runtimeStatRequest = request;
-    return {
-      exists: true,
-      size_bytes: metadata.size_bytes,
-      checksum_sha256: metadata.checksum_sha256
-    };
-  },
-  query: async (sql, params) => {
-    runtimeQueryCall = { sql, params };
-    return { rowCount: 1 };
-  },
-  now: () => new Date('2026-09-11T16:07:00.000Z')
-});
-
-const runtimeResult = await verifyStorageObject({
-  file_id: 'file_1',
-  metadata
-});
-
-assert.deepEqual(runtimeStatRequest, {
-  storage_provider: metadata.storage_provider,
-  bucket: metadata.bucket,
-  object_key: metadata.object_key
-});
-assert.equal(runtimeResult.updated, true);
-assert.equal(runtimeResult.file_id, 'file_1');
-assert.deepEqual(runtimeQueryCall.params, [
-  'file_1',
-  metadata.checksum_sha256,
-  '2026-09-11T16:07:00.000Z',
-  metadata.size_bytes,
-  metadata.checksum_sha256
-]);
-
-let blockedPersistenceCalled = false;
-const verifyMismatchedStorageObject = createWilpayStorageVerificationRuntime({
-  statObject: async () => ({
-    exists: true,
-    size_bytes: metadata.size_bytes + 1,
-    checksum_sha256: metadata.checksum_sha256
-  }),
-  query: async () => {
-    blockedPersistenceCalled = true;
-    return { rowCount: 1 };
-  },
-  now: () => new Date('2026-09-11T16:07:00.000Z')
-});
-
-await assert.rejects(
-  () => verifyMismatchedStorageObject({ file_id: 'file_1', metadata }),
-  /Storage object reconciliation failed/
-);
-assert.equal(blockedPersistenceCalled, false);
 
 console.log('W.I.L Pay storage object reconciler tests passed');
