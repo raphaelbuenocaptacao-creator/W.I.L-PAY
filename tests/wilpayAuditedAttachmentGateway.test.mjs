@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { createWilpayAuditedAttachmentGateway } from '../src/lib/wilpayAuditedAttachmentGateway.js';
+import * as gatewayModule from '../src/lib/wilpayAuditedAttachmentGateway.js';
+
+const { createWilpayAuditedAttachmentGateway } = gatewayModule;
+
+assert.equal(
+  typeof gatewayModule.createWilpayExclusiveAttachmentRuntime,
+  'function',
+  'exclusive attachment runtime must derive trusted readiness at the server composition boundary'
+);
 
 const dbCalls = [];
 let gatewayInput;
