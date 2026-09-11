@@ -103,11 +103,17 @@ const persistVerification = createWilpayStorageVerificationPersistence({
   }
 });
 
-const persisted = await persistVerification({
+const persistencePayload = {
   file_id: 'file_1',
   expected_checksum_sha256: metadata.checksum_sha256,
+  expected_storage_provider: metadata.storage_provider,
+  expected_bucket: metadata.bucket,
+  expected_object_key: metadata.object_key,
+  expected_size_bytes: metadata.size_bytes,
   evidence: statEvidence
-});
+};
+
+const persisted = await persistVerification(persistencePayload);
 
 assert.equal(persisted.updated, true);
 assert.equal(persisted.file_id, 'file_1');
@@ -116,23 +122,27 @@ assert.match(persistenceCall.sql, /WHERE file_id = \$1/i);
 assert.match(persistenceCall.sql, /status = 'active'/i);
 assert.match(persistenceCall.sql, /checksum_sha256 = \$2/i);
 assert.match(persistenceCall.sql, /storage_verified_at IS NULL/i);
+assert.match(persistenceCall.sql, /storage_provider = \$6/i);
+assert.match(persistenceCall.sql, /bucket = \$7/i);
+assert.match(persistenceCall.sql, /object_key = \$8/i);
+assert.match(persistenceCall.sql, /size_bytes = \$9/i);
 assert.deepEqual(persistenceCall.params, [
   'file_1',
   metadata.checksum_sha256,
   statEvidence.storage_verified_at,
   statEvidence.storage_verified_size_bytes,
-  statEvidence.storage_verified_checksum_sha256
+  statEvidence.storage_verified_checksum_sha256,
+  metadata.storage_provider,
+  metadata.bucket,
+  metadata.object_key,
+  metadata.size_bytes
 ]);
 
 const persistConflict = createWilpayStorageVerificationPersistence({
   query: async () => ({ rowCount: 0 })
 });
 await assert.rejects(
-  () => persistConflict({
-    file_id: 'file_1',
-    expected_checksum_sha256: metadata.checksum_sha256,
-    evidence: statEvidence
-  }),
+  () => persistConflict(persistencePayload),
   /verification persistence conflict/i
 );
 
