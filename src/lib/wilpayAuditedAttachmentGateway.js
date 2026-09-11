@@ -13,7 +13,11 @@ const FORBIDDEN_REQUEST_CAPABILITIES = Object.freeze([
   'runtimeStatus',
   'persistPrivate',
   'legacyPersist',
-  'persistAttachment'
+  'persistAttachment',
+  'binding',
+  'observedDatabaseIdentity',
+  'observedStorageIdentity',
+  'transportStatus'
 ]);
 
 function assertNoRequestCapabilityInjection(input) {
@@ -48,8 +52,8 @@ export function createWilpayAuditedAttachmentGateway({
     }
 
     // Fail closed if request-controlled data attempts to replace any capability
-    // that decides persistence mode or writes audit records. These capabilities
-    // belong exclusively to the W.I.L Pay server/runtime composition layer.
+    // that decides persistence mode or writes audit records. Infrastructure
+    // binding and observed resource identities are server-owned capabilities too.
     assertNoRequestCapabilityInjection(input);
 
     return gateway({
