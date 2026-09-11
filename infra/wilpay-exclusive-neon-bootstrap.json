@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "project": "wilpay",
+  "environment": "production",
+  "status": "PREPARED_NOT_PROVISIONED",
+  "auto_apply": false,
+  "database": {
+    "provider": "neon",
+    "project_name": "wilpay-production",
+    "region_id": "us-east-2",
+    "branch_name": "production",
+    "database_name": "wilpay",
+    "role_name": "wilpay_app"
+  },
+  "isolation": {
+    "exclusive_project_required": true,
+    "shared_project_forbidden": true,
+    "forbidden_project_tokens": ["captapro", "gamificacao"],
+    "binding_file": "infra/wilpay-infrastructure-binding.json",
+    "bind_only_after_explicit_resource_approval": true
+  },
+  "security": {
+    "credentials_in_repository_forbidden": true,
+    "connection_string_in_repository_forbidden": true,
+    "service_role_in_repository_forbidden": true,
+    "server_side_database_access_only": true,
+    "audit_log_required": true,
+    "destructive_migration_requires_explicit_approval": true
+  },
+  "data_policy": {
+    "binary_payloads_in_database_forbidden": true,
+    "database_stores_file_metadata_only": true,
+    "private_storage_required_for_new_uploads_after_binding": true
+  },
+  "provisioning_gate": {
+    "requires_external_authorization": true,
+    "requires_cost_confirmation_when_applicable": true,
+    "required_before_apply": [
+      "exclusive_neon_org_id",
+      "exclusive_neon_project_authorization",
+      "private_storage_resource_authorization"
+    ]
+  }
+}
