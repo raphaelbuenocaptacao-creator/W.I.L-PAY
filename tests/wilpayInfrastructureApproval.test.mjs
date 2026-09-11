@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { computeWilpayResourceFingerprint } from '../scripts/wilpayResourceFingerprint.mjs';
 
 const raw = await readFile(new URL('../infra/wilpay-infrastructure-binding.json', import.meta.url), 'utf8');
 const binding = JSON.parse(raw);
@@ -41,6 +42,11 @@ if (!resourcesApproved) {
   assert.equal(approval.evidence_ref.trim().length > 0, true, 'evidence_ref is required');
   assert.equal(typeof approval.resource_fingerprint, 'string');
   assert.match(approval.resource_fingerprint, /^[a-f0-9]{64}$/i, 'resource_fingerprint must be SHA-256 hex');
+  assert.equal(
+    approval.resource_fingerprint,
+    computeWilpayResourceFingerprint(binding),
+    'approved fingerprint must match the currently bound Neon and Storage identities'
+  );
 }
 
 for (const key of ['approved_by', 'approved_at', 'evidence_ref', 'resource_fingerprint']) {
@@ -49,5 +55,34 @@ for (const key of ['approved_by', 'approved_at', 'evidence_ref', 'resource_finge
     assert.equal(/password|token|secret|service_role|connection_string/i.test(value), false, `${key} must not contain secret material`);
   }
 }
+
+const candidate = structuredClone(binding);
+candidate.isolation.database_project_id = 'project-wilpay-exclusive';
+candidate.isolation.database_org_id = 'org-wilpay-exclusive';
+candidate.isolation.storage_provider = 'private-storage-provider';
+candidate.isolation.storage_resource_id = 'storage-wilpay-exclusive';
+candidate.isolation.storage_provider_binding = 'binding-wilpay-production';
+
+const fingerprint = computeWilpayResourceFingerprint(candidate);
+assert.match(fingerprint, /^[a-f0-9]{64}$/i, 'fingerprint must be a SHA-256 hex digest');
+assert.equal(
+  computeWilpayResourceFingerprint(structuredClone(candidate)),
+  fingerprint,
+  'fingerprint must be deterministic for the same resource identities'
+);
+
+const changedStorage = structuredClone(candidate);
+changedStorage.isolation.storage_resource_id = 'storage-wilpay-replaced';
+assert.notEqual(
+  computeWilpayResourceFingerprint(changedStorage),
+  fingerprint,
+  'changing an exclusive resource identity must invalidate the fingerprint'
+);
+
+assert.throws(
+  () => computeWilpayResourceFingerprint(binding),
+  /complete exclusive resource binding/i,
+  'fingerprint generation must fail closed while resource identities are incomplete'
+);
 
 console.log('W.I.L Pay explicit infrastructure approval checks: PASS');
