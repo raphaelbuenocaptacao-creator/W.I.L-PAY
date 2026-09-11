@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { reconcileWilpayStorageObject } from '../src/lib/wilpayStorageObjectReconciler.js';
 import { reconcileWilpayStorageObjectFromStat } from '../src/lib/wilpayStorageObjectStatAdapter.js';
+import { createWilpayStorageVerificationPersistence } from '../src/lib/wilpayStorageVerificationPersistence.js';
 
 const metadata = {
   storage_provider: 'private-provider',
@@ -92,6 +93,47 @@ await assert.rejects(
     verifiedAt: '2026-09-11T16:06:00.000Z'
   }),
   /Storage object reconciliation failed/
+);
+
+let persistenceCall;
+const persistVerification = createWilpayStorageVerificationPersistence({
+  query: async (sql, params) => {
+    persistenceCall = { sql, params };
+    return { rowCount: 1 };
+  }
+});
+
+const persisted = await persistVerification({
+  file_id: 'file_1',
+  expected_checksum_sha256: metadata.checksum_sha256,
+  evidence: statEvidence
+});
+
+assert.equal(persisted.updated, true);
+assert.equal(persisted.file_id, 'file_1');
+assert.match(persistenceCall.sql, /UPDATE wilpay\.file_metadata/i);
+assert.match(persistenceCall.sql, /WHERE file_id = \$1/i);
+assert.match(persistenceCall.sql, /status = 'active'/i);
+assert.match(persistenceCall.sql, /checksum_sha256 = \$2/i);
+assert.match(persistenceCall.sql, /storage_verified_at IS NULL/i);
+assert.deepEqual(persistenceCall.params, [
+  'file_1',
+  metadata.checksum_sha256,
+  statEvidence.storage_verified_at,
+  statEvidence.storage_verified_size_bytes,
+  statEvidence.storage_verified_checksum_sha256
+]);
+
+const persistConflict = createWilpayStorageVerificationPersistence({
+  query: async () => ({ rowCount: 0 })
+});
+await assert.rejects(
+  () => persistConflict({
+    file_id: 'file_1',
+    expected_checksum_sha256: metadata.checksum_sha256,
+    evidence: statEvidence
+  }),
+  /verification persistence conflict/i
 );
 
 console.log('W.I.L Pay storage object reconciler tests passed');
