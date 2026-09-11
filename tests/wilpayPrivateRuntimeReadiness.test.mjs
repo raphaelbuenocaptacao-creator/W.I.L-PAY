@@ -93,4 +93,16 @@ const incompleteTransport = readinessModule.createWilpayPrivateRuntimeReadiness(
 assert.equal(incompleteTransport.ready, false);
 assert.ok(incompleteTransport.reasons.includes('upload_origins_not_configured'));
 
+const stringFalseTransport = readinessModule.createWilpayPrivateRuntimeReadiness({
+  binding,
+  observedDatabaseIdentity,
+  observedStorageIdentity,
+  transportStatus: { endpoint_configured: 'false', upload_origins_configured: 'false' }
+});
+assert.equal(stringFalseTransport.ready, false, 'transport readiness must reject truthy string values');
+assert.equal(stringFalseTransport.endpoint_configured, false);
+assert.equal(stringFalseTransport.upload_origins_configured, false);
+assert.ok(stringFalseTransport.reasons.includes('private_storage_endpoint_not_configured'));
+assert.ok(stringFalseTransport.reasons.includes('upload_origins_not_configured'));
+
 console.log('W.I.L Pay private runtime readiness tests passed');
