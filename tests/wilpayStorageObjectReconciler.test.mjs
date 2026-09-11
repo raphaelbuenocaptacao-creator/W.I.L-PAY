@@ -110,6 +110,7 @@ const persistencePayload = {
   expected_bucket: metadata.bucket,
   expected_object_key: metadata.object_key,
   expected_size_bytes: metadata.size_bytes,
+  expected_uploaded_at: metadata.uploaded_at,
   evidence: statEvidence
 };
 
@@ -126,6 +127,7 @@ assert.match(persistenceCall.sql, /storage_provider = \$6/i);
 assert.match(persistenceCall.sql, /bucket = \$7/i);
 assert.match(persistenceCall.sql, /object_key = \$8/i);
 assert.match(persistenceCall.sql, /size_bytes = \$9/i);
+assert.match(persistenceCall.sql, /uploaded_at = \$10::timestamptz/i);
 assert.deepEqual(persistenceCall.params, [
   'file_1',
   metadata.checksum_sha256,
@@ -135,7 +137,8 @@ assert.deepEqual(persistenceCall.params, [
   metadata.storage_provider,
   metadata.bucket,
   metadata.object_key,
-  metadata.size_bytes
+  metadata.size_bytes,
+  metadata.uploaded_at
 ]);
 
 const persistConflict = createWilpayStorageVerificationPersistence({
