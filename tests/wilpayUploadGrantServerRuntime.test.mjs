@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createWilpayUploadGrantServerRuntime } from '../src/lib/wilpayUploadGrantServerRuntime.js';
+import { computeWilpayResourceFingerprint } from '../scripts/wilpayResourceFingerprint.mjs';
 
 const nowMs = Date.parse('2026-09-12T09:30:00Z');
 const payload = {
@@ -126,5 +127,90 @@ assert.throws(
   }),
   /private infrastructure readiness checker is required/i
 );
+
+const binding = {
+  project: 'wilpay',
+  environment: 'production',
+  isolation: {
+    database_provider: 'neon',
+    database_project_id: 'wilpay-db-project',
+    database_org_id: 'wilpay-org',
+    approved_exclusive_database_project_ids: ['wilpay-db-project'],
+    approved_exclusive_database_org_ids: ['wilpay-org'],
+    database_identity_lock: {
+      project_name: 'wilpay-production', region_id: 'us-east-2', branch_name: 'production', database_name: 'wilpay', role_name: 'wilpay_app'
+    },
+    storage_provider: 'private-object-storage',
+    storage_resource_id: 'wilpay-storage-resource',
+    storage_provider_binding: 'wilpay-storage-binding',
+    storage_bucket: 'wilpay-private-documents',
+    approved_exclusive_storage_resource_ids: ['wilpay-storage-resource'],
+    approved_exclusive_storage_bindings: ['wilpay-storage-binding'],
+    storage_layout: { root_prefix: 'wilpay/production' }
+  },
+  readiness: { approval: {} }
+};
+binding.readiness.approval = {
+  status: 'APPROVED', approved_by: 'infrastructure-owner', approved_at: '2026-09-12T09:00:00.000Z', evidence_ref: 'approval-record',
+  resource_fingerprint: computeWilpayResourceFingerprint(binding)
+};
+const env = {
+  WILPAY_SERVER_NEON_PROJECT_NAME: 'wilpay-production',
+  WILPAY_SERVER_NEON_REGION_ID: 'us-east-2',
+  WILPAY_SERVER_NEON_BRANCH_NAME: 'production',
+  WILPAY_SERVER_NEON_DATABASE_NAME: 'wilpay',
+  WILPAY_SERVER_NEON_ROLE_NAME: 'wilpay_app',
+  WILPAY_SERVER_STORAGE_PROVIDER: 'private-object-storage',
+  WILPAY_SERVER_STORAGE_RESOURCE_ID: 'wilpay-storage-resource',
+  WILPAY_SERVER_STORAGE_PROVIDER_BINDING: 'wilpay-storage-binding',
+  WILPAY_SERVER_STORAGE_BUCKET: 'wilpay-private-documents',
+  WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
+  WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
+  WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
+};
+
+let boundQueries = 0;
+const boundRuntime = createWilpayUploadGrantServerRuntime({
+  query: async () => {
+    boundQueries += 1;
+    return { rows: [{ issued: true }] };
+  },
+  infrastructureBinding: binding,
+  serverEnv: env,
+  consumeGrantNonce: async () => true,
+  signPrivateUpload: async (authorized) => ({
+    request_id: authorized.request_id,
+    upload_id: authorized.upload_id,
+    bucket: authorized.bucket,
+    object_key: authorized.object_key,
+    content_type: authorized.content_type,
+    checksum_sha256: authorized.checksum_sha256,
+    method: 'PUT',
+    upload_url: 'https://storage.example.invalid/upload/opaque',
+    expires_at: new Date(nowMs + 5 * 60 * 1000).toISOString()
+  }),
+  now: () => nowMs
+});
+await boundRuntime(payload, { authenticatedUserId: 'user_123' });
+assert.equal(boundQueries, 1, 'bound readiness should allow the nonce issue when identities match');
+
+let mismatchQueries = 0;
+const mismatchedBoundRuntime = createWilpayUploadGrantServerRuntime({
+  query: async () => {
+    mismatchQueries += 1;
+    return { rows: [{ issued: true }] };
+  },
+  infrastructureBinding: binding,
+  serverEnv: { ...env, WILPAY_SERVER_STORAGE_RESOURCE_ID: 'different-storage' },
+  checkPrivateInfrastructureReady: async () => ({ ready: true }),
+  consumeGrantNonce: async () => true,
+  signPrivateUpload: async () => ({}),
+  now: () => nowMs
+});
+await assert.rejects(
+  mismatchedBoundRuntime(payload, { authenticatedUserId: 'user_123' }),
+  /private infrastructure is not ready/i
+);
+assert.equal(mismatchQueries, 0, 'manual readiness must not override a mismatched bound infrastructure identity');
 
 console.log('PASS wilpayUploadGrantServerRuntime');
