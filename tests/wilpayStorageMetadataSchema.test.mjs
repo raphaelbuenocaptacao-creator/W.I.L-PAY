@@ -25,6 +25,15 @@ assert.match(sql, /position\('\/' IN loan_id\) = 0/);
 assert.match(sql, /'wilpay\/users\/' \|\| owner_user_id \|\| '\/loans\/' \|\| loan_id \|\| '\/'/);
 assert.match(sql, /length\(object_key\) > length\('wilpay\/users\/' \|\| owner_user_id \|\| '\/loans\/' \|\| loan_id \|\| '\/'\)/);
 assert.match(sql, /ALTER TABLE wilpay\.private_files[\s\S]*ADD CONSTRAINT wilpay_object_key_owner_loan_scope/);
+
+// Every new object receives an immutable upload identity. Legacy installations add
+// the column without rewriting old rows, then apply the default only to new writes.
+assert.match(sql, /upload_id\s+uuid\s+NOT NULL\s+DEFAULT gen_random_uuid\(\),/);
+assert.match(sql, /ADD COLUMN IF NOT EXISTS upload_id uuid;/);
+assert.match(sql, /ALTER COLUMN upload_id SET DEFAULT gen_random_uuid\(\);/);
+assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS wilpay_private_files_upload_id_uidx[\s\S]*WHERE upload_id IS NOT NULL;/);
+assert.doesNotMatch(sql, /UPDATE wilpay\.private_files[\s\S]*SET upload_id/);
+
 assert.match(sql, /CREATE OR REPLACE FUNCTION wilpay\.reject_file_audit_mutation\(\)/);
 assert.match(sql, /CREATE TRIGGER wilpay_file_audit_append_only[\s\S]*BEFORE UPDATE OR DELETE ON wilpay\.file_audit_log/);
 assert.match(sql, /RAISE EXCEPTION 'W\.I\.L Pay file audit log is append-only';/);
