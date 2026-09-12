@@ -7,6 +7,12 @@ function requiredFunction(value, message) {
   return value;
 }
 
+function requiredText(value, message) {
+  const text = String(value ?? '').trim();
+  if (!text) throw new Error(message);
+  return text;
+}
+
 function createInfrastructureChecker({ infrastructureBinding, serverEnv }) {
   if (infrastructureBinding == null || serverEnv == null) {
     throw new Error('Exclusive infrastructure binding and server environment are required');
@@ -18,6 +24,37 @@ function createInfrastructureChecker({ infrastructureBinding, serverEnv }) {
   });
 }
 
+function createStorageScope(infrastructureBinding) {
+  const isolation = infrastructureBinding?.isolation ?? {};
+  return Object.freeze({
+    provider: requiredText(isolation.storage_provider, 'Private storage provider is required'),
+    resource_id: requiredText(isolation.storage_resource_id, 'Private storage resource_id is required'),
+    provider_binding: requiredText(isolation.storage_provider_binding, 'Private storage provider binding is required'),
+    bucket: requiredText(isolation.storage_bucket, 'Private storage bucket is required'),
+    root_prefix: requiredText(isolation.storage_layout?.root_prefix, 'Private storage root prefix is required')
+  });
+}
+
+function createScopedStorageSigner(signer, storageScope) {
+  return async (authorized) => {
+    if (authorized?.bucket !== storageScope.bucket) {
+      throw new Error('Authorized upload bucket does not match approved storage scope');
+    }
+
+    const expectedPrefix = `${storageScope.root_prefix}/`;
+    if (typeof authorized?.object_key !== 'string' || !authorized.object_key.startsWith(expectedPrefix)) {
+      throw new Error('Authorized upload object_key does not match approved storage root prefix');
+    }
+
+    const signed = await signer(authorized, storageScope);
+    if (signed?.storage_resource_id !== storageScope.resource_id) {
+      throw new Error('Signed grant storage resource_id mismatch');
+    }
+
+    return signed;
+  };
+}
+
 /**
  * Backend-only composition root for W.I.L Pay private upload grants.
  *
@@ -27,10 +64,14 @@ function createInfrastructureChecker({ infrastructureBinding, serverEnv }) {
  *
  * The database query function must point to the exclusive W.I.L Pay database.
  * Storage credentials remain encapsulated inside signPrivateUpload and are never
- * accepted or returned by this runtime. The infrastructure readiness check must
- * pass before the database, nonce consumer, or private storage signer can run.
- * A nonce is then persisted before it can be consumed or a provider PUT URL can
- * be signed.
+ * accepted or returned by this runtime. Before the provider signer is called, the
+ * authorized upload must match the approved bucket/root prefix and the signer must
+ * attest the exact approved storage resource_id. The storage scope is server-only
+ * and is not returned to the client.
+ *
+ * The infrastructure readiness check must pass before the database, nonce consumer,
+ * or private storage signer can run. A nonce is then persisted before it can be
+ * consumed or a provider PUT URL can be signed.
  */
 export function createWilpayUploadGrantServerRuntime({
   query,
@@ -46,13 +87,14 @@ export function createWilpayUploadGrantServerRuntime({
     infrastructureBinding,
     serverEnv
   });
+  const storageScope = createStorageScope(infrastructureBinding);
   const consume = requiredFunction(
     consumeGrantNonce,
     'Atomic upload grant nonce consumer is required'
   );
-  const signer = requiredFunction(
-    signPrivateUpload,
-    'Private storage upload signer is required'
+  const signer = createScopedStorageSigner(
+    requiredFunction(signPrivateUpload, 'Private storage upload signer is required'),
+    storageScope
   );
 
   if (auditGrantIssued != null && typeof auditGrantIssued !== 'function') {
