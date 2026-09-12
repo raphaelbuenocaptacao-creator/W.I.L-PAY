@@ -1,4 +1,5 @@
 import { authorizeWilpayUploadGrant } from './wilpayUploadGrantAuthorization.js';
+import { assertWilpayUploadGrantServerPolicy } from './wilpayUploadGrantServerPolicy.js';
 
 const MAX_GRANT_TTL_MS = 10 * 60 * 1000;
 
@@ -93,4 +94,54 @@ export async function issueWilpaySignedUploadGrant(
   }
 
   return safeGrant;
+}
+
+/**
+ * Backend-only secure runtime for new upload grants.
+ * Persists a nonce bound to the immutable upload identity before authorization,
+ * consumption, or provider signing. Persistence failure fails closed.
+ */
+export async function issueWilpayPersistedSignedUploadGrant(
+  payload,
+  {
+    authenticatedUserId,
+    issueGrantNonce,
+    consumeGrantNonce,
+    signPrivateUpload,
+    auditGrantIssued,
+    now = () => Date.now()
+  } = {}
+) {
+  if (typeof issueGrantNonce !== 'function') {
+    throw new Error('Atomic upload grant nonce issuer is required');
+  }
+
+  const nowMs = Number(now());
+  if (!Number.isFinite(nowMs)) throw new Error('Invalid grant clock');
+
+  const normalized = assertWilpayUploadGrantServerPolicy(payload, {
+    authenticatedUserId
+  });
+
+  const expiresAt = new Date(nowMs + MAX_GRANT_TTL_MS).toISOString();
+  const issued = await issueGrantNonce({
+    request_id: normalized.request_id,
+    upload_id: normalized.upload_id,
+    owner_user_id: normalized.owner_user_id,
+    file_id: normalized.file_id,
+    object_key: normalized.object_key,
+    expires_at: expiresAt
+  });
+
+  if (issued !== true) {
+    throw new Error('Upload grant nonce could not be persisted');
+  }
+
+  return issueWilpaySignedUploadGrant(normalized, {
+    authenticatedUserId,
+    consumeGrantNonce,
+    signPrivateUpload,
+    auditGrantIssued,
+    now: () => nowMs
+  });
 }
