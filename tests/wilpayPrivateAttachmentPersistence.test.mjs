@@ -70,9 +70,11 @@ const result = await persistWilpayPrivateAttachment({
 });
 
 assert.equal(result.file_id, 'file_789');
+assert.match(result.upload_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 assert.equal(inserted.record_type, 'ATTACHMENT');
 assert.equal(inserted.doc_type, 'DOCUMENTO_FOTO');
 assert.equal(inserted.file_id, 'file_789');
+assert.equal(inserted.upload_id, result.upload_id);
 assert.equal(inserted.storage_provider, 'private');
 assert.equal(inserted.bucket, 'wilpay-private-documents');
 assert.equal(inserted.object_key, 'wilpay/production/user_123/documents/file_789');
@@ -81,6 +83,7 @@ assert.match(inserted.checksum_sha256, /^[a-f0-9]{64}$/);
 assert.deepEqual(order, ['upload', 'persist', 'audit']);
 assert.equal(audited.event_type, 'private_upload_completed');
 assert.equal(audited.file_id, 'file_789');
+assert.equal(audited.upload_id, result.upload_id);
 assert.equal(audited.owner_user_id, 'user_123');
 assert.equal(audited.loan_id, 'loan_456');
 assert.equal(audited.request_id, 'test_private_attachment_persistence_1');
