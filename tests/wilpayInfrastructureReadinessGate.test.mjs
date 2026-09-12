@@ -39,7 +39,8 @@ approved.isolation.storage_observed_identity = {
   bucket: 'wilpay-private-documents',
   root_prefix: 'wilpay/production',
   private_access_enforced: true,
-  versioning_enabled: true
+  versioning_enabled: true,
+  destructive_lifecycle_disabled: true
 };
 approved.readiness.approval.status = 'APPROVED';
 approved.readiness.approval.approved_by = 'infrastructure-owner';
@@ -65,6 +66,13 @@ unversionedStorage.readiness.approval.resource_fingerprint = computeWilpayResour
 const rejectedUnversionedStorage = evaluateWilpayInfrastructureReadiness(unversionedStorage);
 assert.equal(rejectedUnversionedStorage.ready, false, 'readiness must fail closed unless Storage versioning is observed as enabled');
 assert.equal(rejectedUnversionedStorage.reasons.includes('storage_versioning_unverified'), true);
+
+const destructiveLifecycleStorage = structuredClone(approved);
+destructiveLifecycleStorage.isolation.storage_observed_identity.destructive_lifecycle_disabled = false;
+destructiveLifecycleStorage.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(destructiveLifecycleStorage);
+const rejectedDestructiveLifecycle = evaluateWilpayInfrastructureReadiness(destructiveLifecycleStorage);
+assert.equal(rejectedDestructiveLifecycle.ready, false, 'readiness must fail closed while automatic destructive Storage lifecycle deletion is enabled');
+assert.equal(rejectedDestructiveLifecycle.reasons.includes('storage_destructive_lifecycle_unverified'), true);
 
 const nonCanonicalStorageOrigin = structuredClone(approved);
 nonCanonicalStorageOrigin.isolation.storage_endpoint_origin = 'https://storage.wilpay.example/private-upload';
