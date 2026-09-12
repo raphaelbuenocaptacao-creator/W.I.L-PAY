@@ -20,6 +20,7 @@ const storageApproved = Boolean(
   isolation.storage_provider &&
   isolation.storage_resource_id &&
   isolation.storage_provider_binding &&
+  isolation.storage_endpoint_origin &&
   isolation.approved_exclusive_storage_resource_ids.includes(isolation.storage_resource_id) &&
   isolation.approved_exclusive_storage_bindings.includes(isolation.storage_provider_binding)
 );
@@ -62,6 +63,7 @@ candidate.isolation.database_org_id = 'org-wilpay-exclusive';
 candidate.isolation.storage_provider = 'private-storage-provider';
 candidate.isolation.storage_resource_id = 'storage-wilpay-exclusive';
 candidate.isolation.storage_provider_binding = 'binding-wilpay-production';
+candidate.isolation.storage_endpoint_origin = 'https://storage.wilpay.example';
 
 const fingerprint = computeWilpayResourceFingerprint(candidate);
 assert.match(fingerprint, /^[a-f0-9]{64}$/i, 'fingerprint must be a SHA-256 hex digest');
@@ -77,6 +79,14 @@ assert.notEqual(
   computeWilpayResourceFingerprint(changedStorage),
   fingerprint,
   'changing an exclusive resource identity must invalidate the fingerprint'
+);
+
+const changedStorageOrigin = structuredClone(candidate);
+changedStorageOrigin.isolation.storage_endpoint_origin = 'https://replacement-storage.wilpay.example';
+assert.notEqual(
+  computeWilpayResourceFingerprint(changedStorageOrigin),
+  fingerprint,
+  'changing the approved Storage endpoint origin must invalidate the fingerprint'
 );
 
 assert.throws(
