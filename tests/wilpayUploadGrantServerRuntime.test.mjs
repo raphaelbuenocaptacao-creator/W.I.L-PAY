@@ -66,6 +66,7 @@ const env = {
   WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
   WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: 'true',
   WILPAY_SERVER_STORAGE_VERSIONING_ENABLED: 'true',
+  WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'true',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
@@ -194,6 +195,24 @@ await assert.rejects(
 assert.equal(mismatchQueries, 0, 'database nonce issue must not run when infrastructure is not ready');
 assert.equal(mismatchConsumed, 0, 'nonce consumer must not run when infrastructure is not ready');
 assert.equal(mismatchSigned, 0, 'storage signer must not run when infrastructure is not ready');
+
+let lifecycleQueries = 0;
+const destructiveLifecycleRuntime = createWilpayUploadGrantServerRuntime({
+  query: async () => {
+    lifecycleQueries += 1;
+    return { rows: [{ issued: true }] };
+  },
+  infrastructureBinding: binding,
+  serverEnv: { ...env, WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'false' },
+  consumeGrantNonce: async () => true,
+  signPrivateUpload: createSigner(),
+  now: () => nowMs
+});
+await assert.rejects(
+  destructiveLifecycleRuntime(payload, { authenticatedUserId: 'user_123' }),
+  /private infrastructure is not ready/i
+);
+assert.equal(lifecycleQueries, 0, 'upload persistence must not run while destructive lifecycle deletion is enabled');
 
 const wrongResourceRuntime = createWilpayUploadGrantServerRuntime({
   query: async () => ({ rows: [{ issued: true }] }),
