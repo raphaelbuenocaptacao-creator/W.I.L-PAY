@@ -66,12 +66,13 @@ const env = {
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
 
-function createSigner(calls = []) {
-  return async (authorized) => {
-    calls.push(['sign', authorized]);
+function createSigner(calls = [], resourceId = 'wilpay-storage-resource') {
+  return async (authorized, storageScope) => {
+    calls.push(['sign', authorized, storageScope]);
     return {
       request_id: authorized.request_id,
       upload_id: authorized.upload_id,
+      storage_resource_id: resourceId,
       bucket: authorized.bucket,
       object_key: authorized.object_key,
       content_type: authorized.content_type,
@@ -104,8 +105,16 @@ assert.deepEqual(calls.map(([name]) => name), ['issue', 'consume', 'sign']);
 assert.equal(grant.upload_id, payload.upload_id);
 assert.equal(grant.object_key, payload.object_key);
 assert.equal('secret' in grant, false);
+assert.equal('storage_resource_id' in grant, false, 'storage resource identity must stay server-side');
 assert.match(calls[0][1], /wilpay_issue_upload_grant_nonce/i);
 assert.equal(calls[0][2][1], payload.upload_id);
+assert.deepEqual(calls[2][2], {
+  provider: 'private-object-storage',
+  resource_id: 'wilpay-storage-resource',
+  provider_binding: 'wilpay-storage-binding',
+  bucket: 'wilpay-private-documents',
+  root_prefix: 'wilpay/production'
+}, 'signer must receive the exact approved storage scope');
 
 assert.throws(
   () => createWilpayUploadGrantServerRuntime({
@@ -180,5 +189,20 @@ await assert.rejects(
 assert.equal(mismatchQueries, 0, 'database nonce issue must not run when infrastructure is not ready');
 assert.equal(mismatchConsumed, 0, 'nonce consumer must not run when infrastructure is not ready');
 assert.equal(mismatchSigned, 0, 'storage signer must not run when infrastructure is not ready');
+
+const wrongResourceRuntime = createWilpayUploadGrantServerRuntime({
+  query: async () => ({ rows: [{ issued: true }] }),
+  infrastructureBinding: binding,
+  serverEnv: env,
+  consumeGrantNonce: async () => true,
+  signPrivateUpload: createSigner([], 'other-storage-resource'),
+  now: () => nowMs
+});
+
+await assert.rejects(
+  wrongResourceRuntime(payload, { authenticatedUserId: 'user_123' }),
+  /storage resource_id mismatch/i,
+  'a signer must not attest a different storage resource'
+);
 
 console.log('PASS wilpayUploadGrantServerRuntime');
