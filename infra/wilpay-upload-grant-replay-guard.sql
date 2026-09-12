@@ -4,6 +4,7 @@
 
 create table if not exists wilpay_upload_grant_nonce (
   request_id text primary key,
+  upload_id uuid,
   owner_user_id text not null,
   file_id text not null,
   object_key text not null,
@@ -18,16 +19,27 @@ create table if not exists wilpay_upload_grant_nonce (
     check (object_key like 'wilpay/production/%')
 );
 
+-- Additive upgrade path for databases that already have the nonce table.
+-- No automatic backfill is performed; legacy rows remain nullable and cannot
+-- satisfy the new upload-id-bound consume function.
+alter table wilpay_upload_grant_nonce
+  add column if not exists upload_id uuid;
+
 create index if not exists wilpay_upload_grant_nonce_expiry_idx
   on wilpay_upload_grant_nonce (expires_at);
 
 create index if not exists wilpay_upload_grant_nonce_owner_file_idx
   on wilpay_upload_grant_nonce (owner_user_id, file_id);
 
--- Backend-only helper. A grant can be consumed exactly once.
--- The UPDATE lock is atomic across devices/processes sharing this database.
+create unique index if not exists wilpay_upload_grant_nonce_upload_id_idx
+  on wilpay_upload_grant_nonce (upload_id)
+  where upload_id is not null;
+
+-- Backend-only helper. A grant can be consumed exactly once and only for the
+-- immutable upload identity that was recorded when the nonce was created.
 create or replace function wilpay_consume_upload_grant(
   p_request_id text,
+  p_upload_id uuid,
   p_owner_user_id text,
   p_file_id text,
   p_object_key text,
@@ -44,6 +56,7 @@ begin
   update wilpay_upload_grant_nonce
      set consumed_at = p_now
    where request_id = p_request_id
+     and upload_id = p_upload_id
      and owner_user_id = p_owner_user_id
      and file_id = p_file_id
      and object_key = p_object_key
@@ -53,6 +66,23 @@ begin
   get diagnostics v_rows = row_count;
   return v_rows = 1;
 end;
+$$;
+
+-- Legacy signature is intentionally fail-closed. Keeping the signature avoids
+-- a destructive DROP while preventing callers from bypassing upload_id binding.
+create or replace function wilpay_consume_upload_grant(
+  p_request_id text,
+  p_owner_user_id text,
+  p_file_id text,
+  p_object_key text,
+  p_now timestamptz default now()
+)
+returns boolean
+language sql
+security invoker
+set search_path = public
+as $$
+  select false;
 $$;
 
 -- Deliberately no DELETE policy or automatic destructive cleanup here.
