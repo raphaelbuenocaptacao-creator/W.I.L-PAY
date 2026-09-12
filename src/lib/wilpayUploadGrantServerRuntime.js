@@ -10,14 +10,32 @@ function requiredFunction(value, message) {
 function createInfrastructureChecker({
   infrastructureBinding,
   serverEnv,
-  checkPrivateInfrastructureReady
+  checkPrivateInfrastructureReady,
+  allowLegacyReadinessChecker
 }) {
-  const hasBoundInfrastructure = infrastructureBinding != null || serverEnv != null;
-  if (hasBoundInfrastructure) {
+  const hasBinding = infrastructureBinding != null;
+  const hasServerEnv = serverEnv != null;
+
+  if (hasBinding || hasServerEnv) {
+    if (!hasBinding || !hasServerEnv) {
+      throw new Error('Exclusive infrastructure binding and server environment are required');
+    }
+
     return async () => createWilpayServerRuntimeReadiness({
       binding: infrastructureBinding,
       env: serverEnv
     });
+  }
+
+  if (checkPrivateInfrastructureReady != null) {
+    if (allowLegacyReadinessChecker !== true) {
+      throw new Error('Exclusive infrastructure binding and server environment are required');
+    }
+
+    return requiredFunction(
+      checkPrivateInfrastructureReady,
+      'Private infrastructure readiness checker is required'
+    );
   }
 
   return requiredFunction(
@@ -29,10 +47,11 @@ function createInfrastructureChecker({
 /**
  * Backend-only composition root for W.I.L Pay private upload grants.
  *
- * Prefer infrastructureBinding + serverEnv so readiness is derived directly
- * from the approved exclusive binding and observed server-side identities.
- * When that bound configuration is supplied, a manual readiness callback is
- * intentionally ignored and therefore cannot override an identity mismatch.
+ * Production callers should provide infrastructureBinding + serverEnv so
+ * readiness is derived directly from the approved exclusive binding and the
+ * observed server-side identities. The legacy manual readiness callback is
+ * disabled by default and only remains behind allowLegacyReadinessChecker=true
+ * for controlled migration/testing; it must not be enabled in production.
  *
  * The database query function must point to the exclusive W.I.L Pay database.
  * Storage credentials remain encapsulated inside signPrivateUpload and are never
@@ -46,6 +65,7 @@ export function createWilpayUploadGrantServerRuntime({
   infrastructureBinding,
   serverEnv,
   checkPrivateInfrastructureReady,
+  allowLegacyReadinessChecker = false,
   consumeGrantNonce,
   signPrivateUpload,
   auditGrantIssued,
@@ -55,7 +75,8 @@ export function createWilpayUploadGrantServerRuntime({
   const checkInfrastructure = createInfrastructureChecker({
     infrastructureBinding,
     serverEnv,
-    checkPrivateInfrastructureReady
+    checkPrivateInfrastructureReady,
+    allowLegacyReadinessChecker
   });
   const consume = requiredFunction(
     consumeGrantNonce,
