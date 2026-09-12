@@ -11,6 +11,16 @@ assert.match(sql, /consumed_at timestamptz/i);
 assert.match(sql, /expires_at > created_at/i);
 assert.match(sql, /interval '10 minutes'/i);
 assert.match(sql, /object_key like 'wilpay\/production\/%'/i);
+
+// New grants must be born with the same immutable upload identity that will
+// later be required by the atomic consume function.
+assert.match(sql, /create or replace function wilpay_issue_upload_grant_nonce/i);
+assert.match(sql, /p_upload_id uuid/i);
+assert.match(sql, /insert into wilpay_upload_grant_nonce\s*\(\s*request_id,\s*upload_id,/is);
+assert.match(sql, /values\s*\(\s*p_request_id,\s*p_upload_id,/is);
+assert.match(sql, /on conflict do nothing/i);
+assert.match(sql, /return v_rows = 1/i);
+
 assert.match(sql, /create or replace function wilpay_consume_upload_grant/i);
 assert.match(sql, /p_upload_id uuid/i);
 assert.match(sql, /upload_id = p_upload_id/i);
