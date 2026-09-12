@@ -92,6 +92,7 @@ export function assertWilpaySignedUploadGrant(grant, metadata, { allowedUploadOr
   if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
   assertWilpayFileMetadata(metadata);
   assertWilpayNewUploadNamespace(metadata);
+  if (metadata.upload_id != null && grant.upload_id !== metadata.upload_id) throw new Error('Upload grant upload_id mismatch');
   if (grant.bucket !== metadata.bucket) throw new Error('Upload grant bucket mismatch');
   if (grant.object_key !== metadata.object_key) throw new Error('Upload grant object key mismatch');
   if (grant.content_type !== metadata.content_type) throw new Error('Upload grant content type mismatch');
@@ -111,6 +112,7 @@ export function buildWilpaySignedUploadRequest(metadata) {
   assertWilpayNewUploadNamespace(metadata);
   return Object.freeze({
     file_id: metadata.file_id,
+    ...(metadata.upload_id ? { upload_id: metadata.upload_id } : {}),
     owner_user_id: metadata.owner_user_id,
     loan_id: metadata.loan_id,
     document_type: metadata.document_type,
@@ -159,6 +161,7 @@ export async function uploadWilpayPrivateFile({
   if (!response?.ok) throw new Error(`Private upload failed (${response?.status ?? 'unknown'})`);
   return Object.freeze({
     file_id: metadata.file_id,
+    upload_id: metadata.upload_id ?? null,
     bucket: metadata.bucket,
     object_key: metadata.object_key,
     checksum_sha256: metadata.checksum_sha256

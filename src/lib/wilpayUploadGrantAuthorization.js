@@ -21,6 +21,7 @@ export async function authorizeWilpayUploadGrant(
 
   const consumed = await consumeGrantNonce({
     request_id: normalized.request_id,
+    upload_id: normalized.upload_id,
     owner_user_id: normalized.owner_user_id,
     file_id: normalized.file_id,
     object_key: normalized.object_key

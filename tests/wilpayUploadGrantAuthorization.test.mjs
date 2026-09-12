@@ -4,6 +4,7 @@ import { authorizeWilpayUploadGrant } from '../src/lib/wilpayUploadGrantAuthoriz
 const MiB = 1024 * 1024;
 const payload = {
   request_id: 'req_authz_001',
+  upload_id: '123e4567-e89b-42d3-a456-426614174000',
   owner_user_id: 'user_123',
   file_id: 'file_456',
   loan_id: 'loan_789',
@@ -29,10 +30,12 @@ const authorized = await authorizeWilpayUploadGrant(payload, {
 assert.equal(calls, 1);
 assert.deepEqual(received, {
   request_id: payload.request_id,
+  upload_id: payload.upload_id,
   owner_user_id: payload.owner_user_id,
   file_id: payload.file_id,
   object_key: payload.object_key
 });
+assert.equal(authorized.upload_id, payload.upload_id);
 assert.equal(authorized.object_key, payload.object_key);
 assert.equal(authorized.size_bytes, 20 * MiB);
 

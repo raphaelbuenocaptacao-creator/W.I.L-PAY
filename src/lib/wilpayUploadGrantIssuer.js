@@ -13,6 +13,7 @@ function assertSafeSignedGrant(grant, authorized, nowMs) {
   }
 
   if (grant.request_id !== authorized.request_id) throw new Error('Signed grant request_id mismatch');
+  if (grant.upload_id !== authorized.upload_id) throw new Error('Signed grant upload_id mismatch');
   if (grant.bucket !== authorized.bucket) throw new Error('Signed grant bucket mismatch');
   if (grant.object_key !== authorized.object_key) throw new Error('Signed grant object_key mismatch');
   if (grant.content_type !== authorized.content_type) throw new Error('Signed grant content_type mismatch');
@@ -34,6 +35,7 @@ function assertSafeSignedGrant(grant, authorized, nowMs) {
 
   return Object.freeze({
     request_id: authorized.request_id,
+    upload_id: authorized.upload_id,
     bucket: authorized.bucket,
     object_key: authorized.object_key,
     content_type: authorized.content_type,
@@ -48,6 +50,7 @@ function createAuditEvent(authorized, signedGrant, nowMs) {
   return Object.freeze({
     event_type: 'private_upload_grant_issued',
     request_id: authorized.request_id,
+    upload_id: authorized.upload_id,
     owner_user_id: authorized.owner_user_id,
     file_id: authorized.file_id,
     loan_id: authorized.loan_id ?? null,
