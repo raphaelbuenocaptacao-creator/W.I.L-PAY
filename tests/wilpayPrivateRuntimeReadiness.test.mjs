@@ -27,6 +27,7 @@ const binding = {
     storage_provider: 'private-object-storage',
     storage_resource_id: 'wilpay-storage-resource',
     storage_provider_binding: 'wilpay-storage-binding',
+    storage_endpoint_origin: 'https://storage.wilpay.example',
     storage_bucket: 'wilpay-private-documents',
     approved_exclusive_storage_resource_ids: ['wilpay-storage-resource'],
     approved_exclusive_storage_bindings: ['wilpay-storage-binding'],
@@ -54,6 +55,7 @@ const observedStorageIdentity = {
   provider: 'private-object-storage',
   resource_id: 'wilpay-storage-resource',
   provider_binding: 'wilpay-storage-binding',
+  endpoint_origin: 'https://storage.wilpay.example',
   bucket: 'wilpay-private-documents',
   root_prefix: 'wilpay/production'
 };
@@ -83,6 +85,15 @@ const blocked = readinessModule.createWilpayPrivateRuntimeReadiness({
 });
 assert.equal(blocked.ready, false);
 assert.ok(blocked.reasons.includes('storage_identity_mismatch'));
+
+const endpointMismatch = readinessModule.createWilpayPrivateRuntimeReadiness({
+  binding,
+  observedDatabaseIdentity,
+  observedStorageIdentity: { ...observedStorageIdentity, endpoint_origin: 'https://replacement-storage.wilpay.example' },
+  transportStatus: { endpoint_configured: true, upload_origins_configured: true }
+});
+assert.equal(endpointMismatch.ready, false, 'runtime readiness must reject a Storage endpoint origin that differs from the approved binding');
+assert.ok(endpointMismatch.reasons.includes('storage_identity_mismatch'));
 
 const incompleteTransport = readinessModule.createWilpayPrivateRuntimeReadiness({
   binding,
@@ -120,6 +131,7 @@ const serverEnv = {
   WILPAY_SERVER_STORAGE_PROVIDER: 'private-object-storage',
   WILPAY_SERVER_STORAGE_RESOURCE_ID: 'wilpay-storage-resource',
   WILPAY_SERVER_STORAGE_PROVIDER_BINDING: 'wilpay-storage-binding',
+  WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN: 'https://storage.wilpay.example',
   WILPAY_SERVER_STORAGE_BUCKET: 'wilpay-private-documents',
   WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
@@ -131,6 +143,13 @@ assert.equal(serverReady.ready, true);
 assert.equal(serverReady.endpoint_configured, true);
 assert.equal(serverReady.upload_origins_configured, true);
 assert.deepEqual(serverReady.reasons, []);
+
+const serverEndpointMismatch = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN: 'https://replacement-storage.wilpay.example' }
+});
+assert.equal(serverEndpointMismatch.ready, false, 'server readiness must bind the observed Storage origin to the approved resource');
+assert.ok(serverEndpointMismatch.reasons.includes('storage_identity_mismatch'));
 
 const clientExposedConfig = readinessModule.createWilpayServerRuntimeReadiness({
   binding,
