@@ -110,10 +110,9 @@ export function buildWilpaySignedUploadRequest(metadata) {
   if (!metadata || typeof metadata !== 'object') throw new Error('Metadata is required');
   assertWilpayFileMetadata(metadata);
   assertWilpayNewUploadNamespace(metadata);
-  if (!metadata.upload_id) throw new Error('New W.I.L Pay upload metadata must include upload_id');
   return Object.freeze({
     file_id: metadata.file_id,
-    upload_id: metadata.upload_id,
+    ...(metadata.upload_id ? { upload_id: metadata.upload_id } : {}),
     owner_user_id: metadata.owner_user_id,
     loan_id: metadata.loan_id,
     document_type: metadata.document_type,
