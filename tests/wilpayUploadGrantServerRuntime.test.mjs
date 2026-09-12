@@ -27,6 +27,7 @@ const runtime = createWilpayUploadGrantServerRuntime({
     calls.push(['readiness']);
     return { ready: true, status: 'READY', reasons: [] };
   },
+  allowLegacyReadinessChecker: true,
   consumeGrantNonce: async (nonce) => {
     calls.push(['consume', nonce]);
     return true;
@@ -69,6 +70,7 @@ let signed = 0;
 const failClosed = createWilpayUploadGrantServerRuntime({
   query: async () => ({ rows: [{ issued: false }] }),
   checkPrivateInfrastructureReady: async () => ({ ready: true, status: 'READY', reasons: [] }),
+  allowLegacyReadinessChecker: true,
   consumeGrantNonce: async () => {
     consumed += 1;
     return true;
@@ -100,6 +102,7 @@ const blockedByInfrastructure = createWilpayUploadGrantServerRuntime({
     status: 'BLOCKED_EXTERNAL_BINDING',
     reasons: ['database_identity_mismatch']
   }),
+  allowLegacyReadinessChecker: true,
   consumeGrantNonce: async () => {
     blockedConsumed += 1;
     return true;
