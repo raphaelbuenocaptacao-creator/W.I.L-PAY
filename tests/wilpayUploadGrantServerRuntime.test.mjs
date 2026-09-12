@@ -22,6 +22,10 @@ const runtime = createWilpayUploadGrantServerRuntime({
     calls.push(['issue', sql, params]);
     return { rows: [{ issued: true }] };
   },
+  checkPrivateInfrastructureReady: async () => {
+    calls.push(['readiness']);
+    return { ready: true, status: 'READY', reasons: [] };
+  },
   consumeGrantNonce: async (nonce) => {
     calls.push(['consume', nonce]);
     return true;
@@ -44,12 +48,12 @@ const runtime = createWilpayUploadGrantServerRuntime({
 });
 
 const grant = await runtime(payload, { authenticatedUserId: 'user_123' });
-assert.deepEqual(calls.map(([name]) => name), ['issue', 'consume', 'sign']);
+assert.deepEqual(calls.map(([name]) => name), ['readiness', 'issue', 'consume', 'sign']);
 assert.equal(grant.upload_id, payload.upload_id);
 assert.equal(grant.object_key, payload.object_key);
 assert.equal('secret' in grant, false);
-assert.match(calls[0][1], /wilpay_issue_upload_grant_nonce/i);
-assert.equal(calls[0][2][1], payload.upload_id);
+assert.match(calls[1][1], /wilpay_issue_upload_grant_nonce/i);
+assert.equal(calls[1][2][1], payload.upload_id);
 
 await assert.rejects(
   async () => createWilpayUploadGrantServerRuntime({
@@ -63,6 +67,7 @@ let consumed = 0;
 let signed = 0;
 const failClosed = createWilpayUploadGrantServerRuntime({
   query: async () => ({ rows: [{ issued: false }] }),
+  checkPrivateInfrastructureReady: async () => ({ ready: true, status: 'READY', reasons: [] }),
   consumeGrantNonce: async () => {
     consumed += 1;
     return true;
@@ -80,5 +85,46 @@ await assert.rejects(
 );
 assert.equal(consumed, 0, 'nonce consumer must not run when persistence fails');
 assert.equal(signed, 0, 'storage signer must not run when persistence fails');
+
+let blockedQueries = 0;
+let blockedConsumed = 0;
+let blockedSigned = 0;
+const blockedByInfrastructure = createWilpayUploadGrantServerRuntime({
+  query: async () => {
+    blockedQueries += 1;
+    return { rows: [{ issued: true }] };
+  },
+  checkPrivateInfrastructureReady: async () => ({
+    ready: false,
+    status: 'BLOCKED_EXTERNAL_BINDING',
+    reasons: ['database_identity_mismatch']
+  }),
+  consumeGrantNonce: async () => {
+    blockedConsumed += 1;
+    return true;
+  },
+  signPrivateUpload: async () => {
+    blockedSigned += 1;
+    return {};
+  },
+  now: () => nowMs
+});
+
+await assert.rejects(
+  blockedByInfrastructure(payload, { authenticatedUserId: 'user_123' }),
+  /private infrastructure is not ready/i
+);
+assert.equal(blockedQueries, 0, 'database nonce issue must not run when infrastructure is not ready');
+assert.equal(blockedConsumed, 0, 'nonce consumer must not run when infrastructure is not ready');
+assert.equal(blockedSigned, 0, 'storage signer must not run when infrastructure is not ready');
+
+assert.throws(
+  () => createWilpayUploadGrantServerRuntime({
+    query: async () => ({ rows: [{ issued: true }] }),
+    consumeGrantNonce: async () => true,
+    signPrivateUpload: async () => ({})
+  }),
+  /private infrastructure readiness checker is required/i
+);
 
 console.log('PASS wilpayUploadGrantServerRuntime');
