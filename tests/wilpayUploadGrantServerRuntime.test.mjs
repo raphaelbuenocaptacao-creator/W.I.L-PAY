@@ -61,6 +61,7 @@ const env = {
   WILPAY_SERVER_STORAGE_PROVIDER: 'private-object-storage',
   WILPAY_SERVER_STORAGE_RESOURCE_ID: 'wilpay-storage-resource',
   WILPAY_SERVER_STORAGE_PROVIDER_BINDING: 'wilpay-storage-binding',
+  WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN: 'https://storage.example.invalid',
   WILPAY_SERVER_STORAGE_BUCKET: 'wilpay-private-documents',
   WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
