@@ -93,6 +93,13 @@ const storageOriginIdentityMismatch = evaluateWilpayInfrastructureReadiness(mism
 assert.equal(storageOriginIdentityMismatch.ready, false, 'observed Storage endpoint origin must match the locked W.I.L Pay binding');
 assert.equal(storageOriginIdentityMismatch.reasons.includes('storage_identity_mismatch'), true);
 
+const malformedObservedStorageOrigin = structuredClone(approved);
+malformedObservedStorageOrigin.isolation.storage_observed_identity.endpoint_origin = 'https://storage.wilpay.example/private-upload';
+malformedObservedStorageOrigin.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(malformedObservedStorageOrigin);
+const rejectedMalformedObservedOrigin = evaluateWilpayInfrastructureReadiness(malformedObservedStorageOrigin);
+assert.equal(rejectedMalformedObservedOrigin.ready, false, 'runtime-observed Storage endpoint must itself be a canonical HTTPS origin');
+assert.equal(rejectedMalformedObservedOrigin.reasons.includes('storage_observed_endpoint_origin_invalid'), true);
+
 const replacedStorage = structuredClone(approved);
 replacedStorage.isolation.storage_resource_id = 'storage-silently-replaced';
 replacedStorage.isolation.approved_exclusive_storage_resource_ids.push('storage-silently-replaced');
