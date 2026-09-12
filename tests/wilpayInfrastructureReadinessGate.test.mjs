@@ -38,7 +38,8 @@ approved.isolation.storage_observed_identity = {
   endpoint_origin: 'https://storage.wilpay.example',
   bucket: 'wilpay-private-documents',
   root_prefix: 'wilpay/production',
-  private_access_enforced: true
+  private_access_enforced: true,
+  versioning_enabled: true
 };
 approved.readiness.approval.status = 'APPROVED';
 approved.readiness.approval.approved_by = 'infrastructure-owner';
@@ -57,6 +58,13 @@ publicStorage.readiness.approval.resource_fingerprint = computeWilpayResourceFin
 const rejectedPublicStorage = evaluateWilpayInfrastructureReadiness(publicStorage);
 assert.equal(rejectedPublicStorage.ready, false, 'readiness must fail closed unless the observed Storage bucket is private');
 assert.equal(rejectedPublicStorage.reasons.includes('storage_private_access_unverified'), true);
+
+const unversionedStorage = structuredClone(approved);
+unversionedStorage.isolation.storage_observed_identity.versioning_enabled = false;
+unversionedStorage.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(unversionedStorage);
+const rejectedUnversionedStorage = evaluateWilpayInfrastructureReadiness(unversionedStorage);
+assert.equal(rejectedUnversionedStorage.ready, false, 'readiness must fail closed unless Storage versioning is observed as enabled');
+assert.equal(rejectedUnversionedStorage.reasons.includes('storage_versioning_unverified'), true);
 
 const nonCanonicalStorageOrigin = structuredClone(approved);
 nonCanonicalStorageOrigin.isolation.storage_endpoint_origin = 'https://storage.wilpay.example/private-upload';
