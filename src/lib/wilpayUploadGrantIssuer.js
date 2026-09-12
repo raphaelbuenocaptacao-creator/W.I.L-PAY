@@ -8,6 +8,29 @@ function requiredSigner(value) {
   return value;
 }
 
+function assertSafeUploadUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('Signed grant upload_url is required');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Signed grant upload_url is invalid');
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Signed grant upload_url must use HTTPS');
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error('Signed grant upload_url must not contain credentials');
+  }
+
+  return parsed.toString();
+}
+
 function assertSafeSignedGrant(grant, authorized, nowMs) {
   if (!grant || typeof grant !== 'object' || Array.isArray(grant)) {
     throw new Error('Private storage signer returned an invalid grant');
@@ -26,9 +49,7 @@ function assertSafeSignedGrant(grant, authorized, nowMs) {
     throw new Error('Signed grant expiry is not allowed');
   }
 
-  if (typeof grant.upload_url !== 'string' || !grant.upload_url.trim()) {
-    throw new Error('Signed grant upload_url is required');
-  }
+  const uploadUrl = assertSafeUploadUrl(grant.upload_url);
 
   for (const forbidden of ['service_role', 'token', 'secret', 'file_data', 'base64', 'blob']) {
     if (grant[forbidden] != null) throw new Error(`Forbidden signed grant field: ${forbidden}`);
@@ -42,7 +63,7 @@ function assertSafeSignedGrant(grant, authorized, nowMs) {
     content_type: authorized.content_type,
     checksum_sha256: authorized.checksum_sha256,
     method: 'PUT',
-    upload_url: grant.upload_url,
+    upload_url: uploadUrl,
     expires_at: grant.expires_at
   });
 }
