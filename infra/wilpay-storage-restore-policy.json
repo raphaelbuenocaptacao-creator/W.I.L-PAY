@@ -1,0 +1,23 @@
+{
+  "project": "wilpay",
+  "environment": "production",
+  "storage_private_required": true,
+  "versioning_required": true,
+  "restore_capability_required": true,
+  "restore_drill_required": true,
+  "max_restore_drill_age_days": 30,
+  "minimum_complete_clients": 1000,
+  "required_categories": [
+    "documents",
+    "selfies",
+    "receipts",
+    "guarantees",
+    "history"
+  ],
+  "destructive_restore_overwrite_forbidden": true,
+  "restore_to_isolated_prefix_required": true,
+  "evidence_server_side_only": true,
+  "status": "BLOCKED_EXTERNAL_BINDING",
+  "last_verified_restore_at": null,
+  "evidence_ref": null
+}
