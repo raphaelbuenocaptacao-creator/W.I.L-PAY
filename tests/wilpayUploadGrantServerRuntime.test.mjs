@@ -213,4 +213,14 @@ await assert.rejects(
 );
 assert.equal(mismatchQueries, 0, 'manual readiness must not override a mismatched bound infrastructure identity');
 
+assert.throws(
+  () => createWilpayUploadGrantServerRuntime({
+    query: async () => ({ rows: [{ issued: true }] }),
+    checkPrivateInfrastructureReady: async () => ({ ready: true }),
+    consumeGrantNonce: async () => true,
+    signPrivateUpload: async () => ({})
+  }),
+  /exclusive infrastructure binding and server environment are required/i
+);
+
 console.log('PASS wilpayUploadGrantServerRuntime');
