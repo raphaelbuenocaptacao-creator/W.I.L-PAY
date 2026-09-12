@@ -17,7 +17,7 @@ export function computeWilpayResourceFingerprint(binding) {
   const storageLayout = isolation.storage_layout ?? {};
 
   const identity = {
-    fingerprint_version: 1,
+    fingerprint_version: 2,
     project: requireIdentity(binding.project, 'project'),
     environment: requireIdentity(binding.environment, 'environment'),
     database: {
@@ -34,6 +34,7 @@ export function computeWilpayResourceFingerprint(binding) {
       provider: requireIdentity(isolation.storage_provider, 'storage_provider'),
       resource_id: requireIdentity(isolation.storage_resource_id, 'storage_resource_id'),
       provider_binding: requireIdentity(isolation.storage_provider_binding, 'storage_provider_binding'),
+      endpoint_origin: requireIdentity(isolation.storage_endpoint_origin, 'storage_endpoint_origin'),
       bucket: requireIdentity(isolation.storage_bucket, 'storage_bucket'),
       root_prefix: requireIdentity(storageLayout.root_prefix, 'storage_layout.root_prefix')
     }
