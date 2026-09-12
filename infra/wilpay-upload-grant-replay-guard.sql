@@ -35,6 +35,55 @@ create unique index if not exists wilpay_upload_grant_nonce_upload_id_idx
   on wilpay_upload_grant_nonce (upload_id)
   where upload_id is not null;
 
+-- Backend-only helper. New grant nonces are created already bound to the same
+-- immutable upload identity that the consumer must later present. Conflicts
+-- fail closed and never rewrite an existing nonce or upload identity.
+create or replace function wilpay_issue_upload_grant_nonce(
+  p_request_id text,
+  p_upload_id uuid,
+  p_owner_user_id text,
+  p_file_id text,
+  p_object_key text,
+  p_expires_at timestamptz,
+  p_now timestamptz default now()
+)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_rows integer;
+begin
+  if p_upload_id is null then
+    return false;
+  end if;
+
+  insert into wilpay_upload_grant_nonce (
+    request_id,
+    upload_id,
+    owner_user_id,
+    file_id,
+    object_key,
+    expires_at,
+    created_at
+  )
+  values (
+    p_request_id,
+    p_upload_id,
+    p_owner_user_id,
+    p_file_id,
+    p_object_key,
+    p_expires_at,
+    p_now
+  )
+  on conflict do nothing;
+
+  get diagnostics v_rows = row_count;
+  return v_rows = 1;
+end;
+$$;
+
 -- Backend-only helper. A grant can be consumed exactly once and only for the
 -- immutable upload identity that was recorded when the nonce was created.
 create or replace function wilpay_consume_upload_grant(
