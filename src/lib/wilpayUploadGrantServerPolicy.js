@@ -8,6 +8,8 @@ const DOCUMENT_CATEGORY = Object.freeze({
   history: 'history'
 });
 
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function requiredText(value, label) {
   const text = String(value ?? '').trim();
   if (!text) throw new Error(`${label} is required`);
@@ -22,6 +24,12 @@ function safeId(value, label) {
   return text;
 }
 
+function uploadId(value) {
+  const normalized = requiredText(value, 'upload_id').toLowerCase();
+  if (!UUID_V4_PATTERN.test(normalized)) throw new Error('Invalid upload_id');
+  return normalized;
+}
+
 function normalizedMime(value) {
   return requiredText(value, 'content_type').toLowerCase();
 }
@@ -32,6 +40,7 @@ export function assertWilpayUploadGrantServerPolicy(payload, { authenticatedUser
   }
 
   const requestId = safeId(payload.request_id, 'request_id');
+  const immutableUploadId = uploadId(payload.upload_id);
   const ownerUserId = safeId(payload.owner_user_id, 'owner_user_id');
   const authUserId = safeId(authenticatedUserId, 'authenticated_user_id');
   if (ownerUserId !== authUserId) throw new Error('Upload owner does not match authenticated user');
@@ -73,6 +82,7 @@ export function assertWilpayUploadGrantServerPolicy(payload, { authenticatedUser
 
   return Object.freeze({
     request_id: requestId,
+    upload_id: immutableUploadId,
     owner_user_id: ownerUserId,
     file_id: fileId,
     loan_id: String(payload.loan_id),
