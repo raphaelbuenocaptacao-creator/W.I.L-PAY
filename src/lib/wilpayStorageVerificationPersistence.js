@@ -1,4 +1,5 @@
 const SHA256_HEX = /^[a-f0-9]{64}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function requiredText(value, label) {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${label} is required`);
@@ -39,15 +40,32 @@ function optionalOwnershipSnapshot(raw) {
   });
 }
 
+function uploadIdentitySnapshot(raw) {
+  if (!Object.prototype.hasOwnProperty.call(raw, 'expected_upload_id')) {
+    return Object.freeze({ supplied: false, uploadId: null });
+  }
+
+  if (raw.expected_upload_id == null) {
+    return Object.freeze({ supplied: true, uploadId: null });
+  }
+
+  const uploadId = requiredText(raw.expected_upload_id, 'verification expected_upload_id');
+  if (!UUID.test(uploadId)) {
+    throw new Error('verification expected_upload_id must be a UUID');
+  }
+
+  return Object.freeze({ supplied: true, uploadId: uploadId.toLowerCase() });
+}
+
 /**
  * Creates a server-only optimistic persistence adapter for object verification evidence.
  *
  * `query` must be bound to the exclusive W.I.L Pay database connection. This adapter
  * accepts no credentials and persists only verification metadata. The UPDATE is
  * intentionally conditional so a concurrent lifecycle, upload-version, object-identity,
- * ownership/loan binding, size or checksum change cannot cause stale verification
- * evidence to be persisted. The trusted runtime always supplies the ownership snapshot;
- * the optional legacy path remains only for existing direct adapter callers.
+ * ownership/loan binding, immutable upload identity, size or checksum change cannot cause
+ * stale verification evidence to be persisted. The trusted runtime always supplies both
+ * ownership and upload-identity snapshots; optional legacy direct callers remain supported.
  */
 export function createWilpayStorageVerificationPersistence({ query } = {}) {
   if (typeof query !== 'function') {
@@ -70,6 +88,7 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
     const expectedSize = requiredPositiveInteger(raw.expected_size_bytes, 'verification expected_size_bytes');
     const expectedUploadedAt = requiredTimestamp(raw.expected_uploaded_at, 'verification expected_uploaded_at');
     const ownershipSnapshot = optionalOwnershipSnapshot(raw);
+    const uploadSnapshot = uploadIdentitySnapshot(raw);
 
     const evidence = raw.evidence;
     if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
@@ -130,6 +149,16 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
         ownershipSnapshot.loanId,
         ownershipSnapshot.documentType
       );
+    }
+
+    if (uploadSnapshot.supplied) {
+      if (uploadSnapshot.uploadId === null) {
+        sql += '\n        AND upload_id IS NULL';
+      } else {
+        const uploadParam = params.length + 1;
+        sql += `\n        AND upload_id = $${uploadParam}::uuid`;
+        params.push(uploadSnapshot.uploadId);
+      }
     }
 
     const result = await query(sql, Object.freeze(params));
