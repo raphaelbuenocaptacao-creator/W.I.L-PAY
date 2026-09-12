@@ -28,12 +28,14 @@ approved.isolation.database_observed_identity = {
 approved.isolation.storage_provider = 'private-storage-provider';
 approved.isolation.storage_resource_id = 'storage-wilpay-exclusive';
 approved.isolation.storage_provider_binding = 'binding-wilpay-production';
+approved.isolation.storage_endpoint_origin = 'https://storage.wilpay.example';
 approved.isolation.approved_exclusive_storage_resource_ids = ['storage-wilpay-exclusive'];
 approved.isolation.approved_exclusive_storage_bindings = ['binding-wilpay-production'];
 approved.isolation.storage_observed_identity = {
   provider: 'private-storage-provider',
   resource_id: 'storage-wilpay-exclusive',
   provider_binding: 'binding-wilpay-production',
+  endpoint_origin: 'https://storage.wilpay.example',
   bucket: 'wilpay-private-documents',
   root_prefix: 'wilpay/production'
 };
@@ -76,12 +78,25 @@ const storageIdentityMismatch = evaluateWilpayInfrastructureReadiness(mismatched
 assert.equal(storageIdentityMismatch.ready, false, 'observed Storage identity must match the locked W.I.L Pay binding');
 assert.equal(storageIdentityMismatch.reasons.includes('storage_identity_mismatch'), true);
 
+const mismatchedObservedStorageOrigin = structuredClone(approved);
+mismatchedObservedStorageOrigin.isolation.storage_observed_identity.endpoint_origin = 'https://replacement-storage.wilpay.example';
+mismatchedObservedStorageOrigin.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(mismatchedObservedStorageOrigin);
+const storageOriginIdentityMismatch = evaluateWilpayInfrastructureReadiness(mismatchedObservedStorageOrigin);
+assert.equal(storageOriginIdentityMismatch.ready, false, 'observed Storage endpoint origin must match the locked W.I.L Pay binding');
+assert.equal(storageOriginIdentityMismatch.reasons.includes('storage_identity_mismatch'), true);
+
 const replacedStorage = structuredClone(approved);
 replacedStorage.isolation.storage_resource_id = 'storage-silently-replaced';
 replacedStorage.isolation.approved_exclusive_storage_resource_ids.push('storage-silently-replaced');
 const tampered = evaluateWilpayInfrastructureReadiness(replacedStorage);
 assert.equal(tampered.ready, false, 'resource replacement must invalidate readiness');
 assert.equal(tampered.reasons.includes('resource_fingerprint_mismatch'), true);
+
+const replacedStorageOrigin = structuredClone(approved);
+replacedStorageOrigin.isolation.storage_endpoint_origin = 'https://replacement-storage.wilpay.example';
+const tamperedOrigin = evaluateWilpayInfrastructureReadiness(replacedStorageOrigin);
+assert.equal(tamperedOrigin.ready, false, 'storage endpoint origin replacement must invalidate readiness');
+assert.equal(tamperedOrigin.reasons.includes('resource_fingerprint_mismatch'), true);
 
 const unallowlistedDatabase = structuredClone(approved);
 unallowlistedDatabase.isolation.database_project_id = 'project-not-approved';
