@@ -25,6 +25,20 @@ function requiredTimestamp(value, label) {
   return new Date(text).toISOString();
 }
 
+function optionalOwnershipSnapshot(raw) {
+  const values = [raw.expected_owner_user_id, raw.expected_loan_id, raw.expected_document_type];
+  const supplied = values.filter(value => value != null).length;
+  if (supplied === 0) return null;
+  if (supplied !== values.length) {
+    throw new Error('verification ownership snapshot must include owner_user_id, loan_id and document_type');
+  }
+  return Object.freeze({
+    ownerUserId: requiredText(raw.expected_owner_user_id, 'verification expected_owner_user_id'),
+    loanId: requiredText(raw.expected_loan_id, 'verification expected_loan_id'),
+    documentType: requiredText(raw.expected_document_type, 'verification expected_document_type')
+  });
+}
+
 /**
  * Creates a server-only optimistic persistence adapter for object verification evidence.
  *
@@ -32,7 +46,8 @@ function requiredTimestamp(value, label) {
  * accepts no credentials and persists only verification metadata. The UPDATE is
  * intentionally conditional so a concurrent lifecycle, upload-version, object-identity,
  * ownership/loan binding, size or checksum change cannot cause stale verification
- * evidence to be persisted.
+ * evidence to be persisted. The trusted runtime always supplies the ownership snapshot;
+ * the optional legacy path remains only for existing direct adapter callers.
  */
 export function createWilpayStorageVerificationPersistence({ query } = {}) {
   if (typeof query !== 'function') {
@@ -54,9 +69,7 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
     const expectedObjectKey = requiredText(raw.expected_object_key, 'verification expected_object_key');
     const expectedSize = requiredPositiveInteger(raw.expected_size_bytes, 'verification expected_size_bytes');
     const expectedUploadedAt = requiredTimestamp(raw.expected_uploaded_at, 'verification expected_uploaded_at');
-    const expectedOwnerUserId = requiredText(raw.expected_owner_user_id, 'verification expected_owner_user_id');
-    const expectedLoanId = requiredText(raw.expected_loan_id, 'verification expected_loan_id');
-    const expectedDocumentType = requiredText(raw.expected_document_type, 'verification expected_document_type');
+    const ownershipSnapshot = optionalOwnershipSnapshot(raw);
 
     const evidence = raw.evidence;
     if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
@@ -80,7 +93,7 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
       throw new Error('verification evidence size does not match expected size');
     }
 
-    const sql = `UPDATE wilpay.file_metadata
+    let sql = `UPDATE wilpay.file_metadata
       SET storage_verified_at = $3::timestamptz,
           storage_verified_size_bytes = $4,
           storage_verified_checksum_sha256 = $5
@@ -92,12 +105,9 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
         AND bucket = $7
         AND object_key = $8
         AND size_bytes = $9
-        AND uploaded_at = $10::timestamptz
-        AND owner_user_id = $11
-        AND loan_id = $12
-        AND document_type = $13`;
+        AND uploaded_at = $10::timestamptz`;
 
-    const params = Object.freeze([
+    const params = [
       fileId,
       expectedChecksum,
       verifiedAt,
@@ -107,13 +117,22 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
       expectedBucket,
       expectedObjectKey,
       expectedSize,
-      expectedUploadedAt,
-      expectedOwnerUserId,
-      expectedLoanId,
-      expectedDocumentType
-    ]);
+      expectedUploadedAt
+    ];
 
-    const result = await query(sql, params);
+    if (ownershipSnapshot) {
+      sql += `
+        AND owner_user_id = $11
+        AND loan_id = $12
+        AND document_type = $13`;
+      params.push(
+        ownershipSnapshot.ownerUserId,
+        ownershipSnapshot.loanId,
+        ownershipSnapshot.documentType
+      );
+    }
+
+    const result = await query(sql, Object.freeze(params));
     if (!result || result.rowCount !== 1) {
       throw new Error('W.I.L Pay verification persistence conflict');
     }
