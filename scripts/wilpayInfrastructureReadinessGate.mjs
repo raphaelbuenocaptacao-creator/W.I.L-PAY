@@ -85,6 +85,10 @@ function storageIdentityStatus(isolation) {
     return 'private_access_unverified';
   }
 
+  if (observed.versioning_enabled !== true) {
+    return 'versioning_unverified';
+  }
+
   const matches = identityKeys.every((key) => observed[key].trim() === expected[key].trim());
   return matches ? 'verified' : 'mismatch';
 }
@@ -143,6 +147,8 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
       reasons.push('storage_observed_endpoint_origin_invalid');
     } else if (identityStatus === 'private_access_unverified') {
       reasons.push('storage_private_access_unverified');
+    } else if (identityStatus === 'versioning_unverified') {
+      reasons.push('storage_versioning_unverified');
     } else if (identityStatus === 'mismatch') {
       reasons.push('storage_identity_mismatch');
     }
@@ -224,6 +230,7 @@ const CLIENT_EXPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
   'VITE_WILPAY_STORAGE_BUCKET',
   'VITE_WILPAY_STORAGE_ROOT_PREFIX',
   'VITE_WILPAY_STORAGE_PRIVATE_ACCESS_ENFORCED',
+  'VITE_WILPAY_STORAGE_VERSIONING_ENABLED',
   'VITE_WILPAY_PRIVATE_STORAGE_ENDPOINT_CONFIGURED',
   'VITE_WILPAY_UPLOAD_ORIGINS_CONFIGURED'
 ]);
@@ -242,6 +249,7 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   const endpointFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED');
   const uploadOriginsFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED');
   const privateAccessFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED');
+  const versioningFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_VERSIONING_ENABLED');
 
   const base = createWilpayPrivateRuntimeReadiness({
     binding,
@@ -259,7 +267,8 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
       endpoint_origin: serverEnv.WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN,
       bucket: serverEnv.WILPAY_SERVER_STORAGE_BUCKET,
       root_prefix: serverEnv.WILPAY_SERVER_STORAGE_ROOT_PREFIX,
-      private_access_enforced: privateAccessFlag.value
+      private_access_enforced: privateAccessFlag.value,
+      versioning_enabled: versioningFlag.value
     },
     transportStatus: {
       endpoint_configured: endpointFlag.value,
@@ -272,6 +281,7 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   if (clientExposedInfrastructure) reasons.push('client_exposed_infrastructure_configuration');
   if (!endpointFlag.valid || !uploadOriginsFlag.valid) reasons.push('server_transport_flag_invalid');
   if (!privateAccessFlag.valid) reasons.push('server_storage_private_flag_invalid');
+  if (!versioningFlag.valid) reasons.push('server_storage_versioning_flag_invalid');
 
   const ready = base.ready && reasons.length === 0;
   return Object.freeze({
