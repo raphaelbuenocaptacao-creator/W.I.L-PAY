@@ -77,6 +77,10 @@ function storageIdentityStatus(isolation) {
     return 'unverified';
   }
 
+  if (!canonicalHttpsOrigin(observed.endpoint_origin)) {
+    return 'invalid_origin';
+  }
+
   const matches = identityKeys.every((key) => observed[key].trim() === expected[key].trim());
   return matches ? 'verified' : 'mismatch';
 }
@@ -131,6 +135,8 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
     const identityStatus = storageIdentityStatus(isolation);
     if (identityStatus === 'unverified') {
       reasons.push('storage_identity_unverified');
+    } else if (identityStatus === 'invalid_origin') {
+      reasons.push('storage_observed_endpoint_origin_invalid');
     } else if (identityStatus === 'mismatch') {
       reasons.push('storage_identity_mismatch');
     }
