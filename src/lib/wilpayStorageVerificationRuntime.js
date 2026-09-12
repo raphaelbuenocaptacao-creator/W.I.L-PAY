@@ -22,7 +22,10 @@ function assertFileIdOnlyRequest(raw) {
 }
 
 async function loadTrustedMetadata(query, fileId) {
-  const sql = `SELECT storage_provider,
+  const sql = `SELECT owner_user_id,
+      loan_id,
+      document_type,
+      storage_provider,
       bucket,
       object_key,
       size_bytes,
@@ -45,6 +48,9 @@ async function loadTrustedMetadata(query, fileId) {
   }
 
   return Object.freeze({
+    owner_user_id: requiredText(metadata.owner_user_id, 'verification metadata owner_user_id'),
+    loan_id: requiredText(metadata.loan_id, 'verification metadata loan_id'),
+    document_type: requiredText(metadata.document_type, 'verification metadata document_type'),
     storage_provider: metadata.storage_provider,
     bucket: metadata.bucket,
     object_key: metadata.object_key,
@@ -59,7 +65,8 @@ async function loadTrustedMetadata(query, fileId) {
  * database-owned metadata -> storage stat -> object reconciliation -> guarded persistence.
  *
  * This module is server-only. The caller supplies only file_id; object identity,
- * checksum, size and upload time are loaded from the exclusive W.I.L Pay database.
+ * ownership/loan binding, checksum, size and upload time are loaded from the exclusive
+ * W.I.L Pay database and re-checked when evidence is persisted.
  */
 export function createWilpayStorageVerificationRuntime({ statObject, query, now = () => new Date() } = {}) {
   if (typeof statObject !== 'function') {
@@ -92,6 +99,9 @@ export function createWilpayStorageVerificationRuntime({ statObject, query, now 
       expected_object_key: metadata.object_key,
       expected_size_bytes: metadata.size_bytes,
       expected_uploaded_at: metadata.uploaded_at,
+      expected_owner_user_id: metadata.owner_user_id,
+      expected_loan_id: metadata.loan_id,
+      expected_document_type: metadata.document_type,
       evidence
     });
   };
