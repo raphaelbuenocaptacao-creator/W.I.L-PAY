@@ -47,11 +47,12 @@ function storageIdentityStatus(isolation) {
     provider: isolation.storage_provider,
     resource_id: isolation.storage_resource_id,
     provider_binding: isolation.storage_provider_binding,
+    endpoint_origin: isolation.storage_endpoint_origin,
     bucket: isolation.storage_bucket,
     root_prefix: isolation.storage_layout?.root_prefix
   };
 
-  const identityKeys = ['provider', 'resource_id', 'provider_binding', 'bucket', 'root_prefix'];
+  const identityKeys = ['provider', 'resource_id', 'provider_binding', 'endpoint_origin', 'bucket', 'root_prefix'];
   const complete = identityKeys.every((key) => present(observed[key]) && present(expected[key]));
   if (!complete) {
     return 'unverified';
@@ -92,7 +93,8 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
   const storageComplete =
     present(isolation.storage_provider) &&
     present(isolation.storage_resource_id) &&
-    present(isolation.storage_provider_binding);
+    present(isolation.storage_provider_binding) &&
+    present(isolation.storage_endpoint_origin);
   if (!storageComplete) {
     reasons.push('storage_binding_incomplete');
   } else {
@@ -183,6 +185,7 @@ const CLIENT_EXPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
   'VITE_WILPAY_STORAGE_PROVIDER',
   'VITE_WILPAY_STORAGE_RESOURCE_ID',
   'VITE_WILPAY_STORAGE_PROVIDER_BINDING',
+  'VITE_WILPAY_STORAGE_ENDPOINT_ORIGIN',
   'VITE_WILPAY_STORAGE_BUCKET',
   'VITE_WILPAY_STORAGE_ROOT_PREFIX',
   'VITE_WILPAY_PRIVATE_STORAGE_ENDPOINT_CONFIGURED',
@@ -216,6 +219,7 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
       provider: serverEnv.WILPAY_SERVER_STORAGE_PROVIDER,
       resource_id: serverEnv.WILPAY_SERVER_STORAGE_RESOURCE_ID,
       provider_binding: serverEnv.WILPAY_SERVER_STORAGE_PROVIDER_BINDING,
+      endpoint_origin: serverEnv.WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN,
       bucket: serverEnv.WILPAY_SERVER_STORAGE_BUCKET,
       root_prefix: serverEnv.WILPAY_SERVER_STORAGE_ROOT_PREFIX
     },
