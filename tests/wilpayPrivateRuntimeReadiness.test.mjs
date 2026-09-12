@@ -58,7 +58,8 @@ const observedStorageIdentity = {
   endpoint_origin: 'https://storage.wilpay.example',
   bucket: 'wilpay-private-documents',
   root_prefix: 'wilpay/production',
-  private_access_enforced: true
+  private_access_enforced: true,
+  versioning_enabled: true
 };
 
 const before = JSON.stringify(binding);
@@ -95,6 +96,15 @@ const publicBucket = readinessModule.createWilpayPrivateRuntimeReadiness({
 });
 assert.equal(publicBucket.ready, false, 'runtime must fail closed when private bucket access is not observed');
 assert.ok(publicBucket.reasons.includes('storage_private_access_unverified'));
+
+const unversionedBucket = readinessModule.createWilpayPrivateRuntimeReadiness({
+  binding,
+  observedDatabaseIdentity,
+  observedStorageIdentity: { ...observedStorageIdentity, versioning_enabled: false },
+  transportStatus: { endpoint_configured: true, upload_origins_configured: true }
+});
+assert.equal(unversionedBucket.ready, false, 'runtime must fail closed when bucket versioning is not observed');
+assert.ok(unversionedBucket.reasons.includes('storage_versioning_unverified'));
 
 const endpointMismatch = readinessModule.createWilpayPrivateRuntimeReadiness({
   binding,
@@ -145,6 +155,7 @@ const serverEnv = {
   WILPAY_SERVER_STORAGE_BUCKET: 'wilpay-private-documents',
   WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
   WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: 'true',
+  WILPAY_SERVER_STORAGE_VERSIONING_ENABLED: 'true',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
@@ -162,6 +173,13 @@ const serverPublicBucket = readinessModule.createWilpayServerRuntimeReadiness({
 assert.equal(serverPublicBucket.ready, false);
 assert.ok(serverPublicBucket.reasons.includes('storage_private_access_unverified'));
 
+const serverUnversionedBucket = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_VERSIONING_ENABLED: 'false' }
+});
+assert.equal(serverUnversionedBucket.ready, false);
+assert.ok(serverUnversionedBucket.reasons.includes('storage_versioning_unverified'));
+
 const serverEndpointMismatch = readinessModule.createWilpayServerRuntimeReadiness({
   binding,
   env: { ...serverEnv, WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN: 'https://replacement-storage.wilpay.example' }
@@ -175,6 +193,13 @@ const clientExposedConfig = readinessModule.createWilpayServerRuntimeReadiness({
 });
 assert.equal(clientExposedConfig.ready, false);
 assert.ok(clientExposedConfig.reasons.includes('client_exposed_infrastructure_configuration'));
+
+const clientExposedVersioning = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, VITE_WILPAY_STORAGE_VERSIONING_ENABLED: 'true' }
+});
+assert.equal(clientExposedVersioning.ready, false);
+assert.ok(clientExposedVersioning.reasons.includes('client_exposed_infrastructure_configuration'));
 
 const malformedServerFlag = readinessModule.createWilpayServerRuntimeReadiness({
   binding,
@@ -190,5 +215,12 @@ const missingPrivateEvidence = readinessModule.createWilpayServerRuntimeReadines
 });
 assert.equal(missingPrivateEvidence.ready, false);
 assert.ok(missingPrivateEvidence.reasons.includes('server_storage_private_flag_invalid'));
+
+const missingVersioningEvidence = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_VERSIONING_ENABLED: undefined }
+});
+assert.equal(missingVersioningEvidence.ready, false);
+assert.ok(missingVersioningEvidence.reasons.includes('server_storage_versioning_flag_invalid'));
 
 console.log('W.I.L Pay private runtime readiness tests passed');
