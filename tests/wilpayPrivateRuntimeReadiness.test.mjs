@@ -59,7 +59,8 @@ const observedStorageIdentity = {
   bucket: 'wilpay-private-documents',
   root_prefix: 'wilpay/production',
   private_access_enforced: true,
-  versioning_enabled: true
+  versioning_enabled: true,
+  destructive_lifecycle_disabled: true
 };
 
 const before = JSON.stringify(binding);
@@ -105,6 +106,15 @@ const unversionedBucket = readinessModule.createWilpayPrivateRuntimeReadiness({
 });
 assert.equal(unversionedBucket.ready, false, 'runtime must fail closed when bucket versioning is not observed');
 assert.ok(unversionedBucket.reasons.includes('storage_versioning_unverified'));
+
+const destructiveLifecycleBucket = readinessModule.createWilpayPrivateRuntimeReadiness({
+  binding,
+  observedDatabaseIdentity,
+  observedStorageIdentity: { ...observedStorageIdentity, destructive_lifecycle_disabled: false },
+  transportStatus: { endpoint_configured: true, upload_origins_configured: true }
+});
+assert.equal(destructiveLifecycleBucket.ready, false, 'runtime must fail closed while destructive lifecycle deletion is enabled');
+assert.ok(destructiveLifecycleBucket.reasons.includes('storage_destructive_lifecycle_unverified'));
 
 const endpointMismatch = readinessModule.createWilpayPrivateRuntimeReadiness({
   binding,
@@ -156,6 +166,7 @@ const serverEnv = {
   WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
   WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: 'true',
   WILPAY_SERVER_STORAGE_VERSIONING_ENABLED: 'true',
+  WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'true',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
@@ -180,6 +191,13 @@ const serverUnversionedBucket = readinessModule.createWilpayServerRuntimeReadine
 assert.equal(serverUnversionedBucket.ready, false);
 assert.ok(serverUnversionedBucket.reasons.includes('storage_versioning_unverified'));
 
+const serverDestructiveLifecycle = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'false' }
+});
+assert.equal(serverDestructiveLifecycle.ready, false);
+assert.ok(serverDestructiveLifecycle.reasons.includes('storage_destructive_lifecycle_unverified'));
+
 const serverEndpointMismatch = readinessModule.createWilpayServerRuntimeReadiness({
   binding,
   env: { ...serverEnv, WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN: 'https://replacement-storage.wilpay.example' }
@@ -200,6 +218,13 @@ const clientExposedVersioning = readinessModule.createWilpayServerRuntimeReadine
 });
 assert.equal(clientExposedVersioning.ready, false);
 assert.ok(clientExposedVersioning.reasons.includes('client_exposed_infrastructure_configuration'));
+
+const clientExposedLifecycle = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, VITE_WILPAY_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'true' }
+});
+assert.equal(clientExposedLifecycle.ready, false);
+assert.ok(clientExposedLifecycle.reasons.includes('client_exposed_infrastructure_configuration'));
 
 const malformedServerFlag = readinessModule.createWilpayServerRuntimeReadiness({
   binding,
@@ -222,5 +247,12 @@ const missingVersioningEvidence = readinessModule.createWilpayServerRuntimeReadi
 });
 assert.equal(missingVersioningEvidence.ready, false);
 assert.ok(missingVersioningEvidence.reasons.includes('server_storage_versioning_flag_invalid'));
+
+const missingLifecycleEvidence = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: undefined }
+});
+assert.equal(missingLifecycleEvidence.ready, false);
+assert.ok(missingLifecycleEvidence.reasons.includes('server_storage_lifecycle_flag_invalid'));
 
 console.log('W.I.L Pay private runtime readiness tests passed');
