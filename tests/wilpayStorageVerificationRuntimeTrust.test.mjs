@@ -53,6 +53,7 @@ assert.match(calls[1].sql, /storage_provider = \$6/i);
 assert.match(calls[1].sql, /bucket = \$7/i);
 assert.match(calls[1].sql, /object_key = \$8/i);
 assert.match(calls[1].sql, /size_bytes = \$9/i);
+assert.match(calls[1].sql, /uploaded_at = \$10::timestamptz/i);
 assert.deepEqual(calls[1].params, [
   'file_1',
   trustedMetadata.checksum_sha256,
@@ -62,7 +63,8 @@ assert.deepEqual(calls[1].params, [
   trustedMetadata.storage_provider,
   trustedMetadata.bucket,
   trustedMetadata.object_key,
-  trustedMetadata.size_bytes
+  trustedMetadata.size_bytes,
+  trustedMetadata.uploaded_at
 ]);
 
 await assert.rejects(
