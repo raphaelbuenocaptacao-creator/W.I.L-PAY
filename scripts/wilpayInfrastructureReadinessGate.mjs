@@ -4,6 +4,25 @@ function present(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function canonicalHttpsOrigin(value) {
+  if (!present(value)) return false;
+  const raw = value.trim();
+  try {
+    const parsed = new URL(raw);
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.username === '' &&
+      parsed.password === '' &&
+      parsed.pathname === '/' &&
+      parsed.search === '' &&
+      parsed.hash === '' &&
+      raw === parsed.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
 function allowlisted(list, value) {
   return Array.isArray(list) && present(value) && list.includes(value);
 }
@@ -98,6 +117,10 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
   if (!storageComplete) {
     reasons.push('storage_binding_incomplete');
   } else {
+    if (!canonicalHttpsOrigin(isolation.storage_endpoint_origin)) {
+      reasons.push('storage_endpoint_origin_invalid');
+    }
+
     if (
       !allowlisted(isolation.approved_exclusive_storage_resource_ids, isolation.storage_resource_id) ||
       !allowlisted(isolation.approved_exclusive_storage_bindings, isolation.storage_provider_binding)
