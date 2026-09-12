@@ -1,4 +1,5 @@
 const REQUIRED_UPLOAD_FIELDS = ['file_id', 'bucket', 'object_key', 'checksum_sha256'];
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function requiredText(value, label) {
   const text = String(value ?? '').trim();
@@ -10,6 +11,13 @@ function positiveSize(value) {
   const size = Number(value);
   if (!Number.isFinite(size) || size <= 0) throw new Error('file size must be positive');
   return Math.trunc(size);
+}
+
+function optionalUploadId(value) {
+  if (value == null || value === '') return null;
+  const uploadId = requiredText(value, 'upload.upload_id').toLowerCase();
+  if (!UUID_V4_PATTERN.test(uploadId)) throw new Error('upload.upload_id must be a UUID v4');
+  return uploadId;
 }
 
 export function buildWilpayAttachmentRecord({
@@ -25,6 +33,7 @@ export function buildWilpayAttachmentRecord({
   if (!upload || typeof upload !== 'object') throw new Error('private upload result is required');
 
   for (const key of REQUIRED_UPLOAD_FIELDS) requiredText(upload[key], `upload.${key}`);
+  const uploadId = optionalUploadId(upload.upload_id);
 
   const record = {
     record_type: 'ATTACHMENT',
@@ -36,6 +45,7 @@ export function buildWilpayAttachmentRecord({
     size: positiveSize(file.size),
     storage_provider: requiredText(storageProvider, 'storageProvider'),
     file_id: requiredText(upload.file_id, 'upload.file_id'),
+    ...(uploadId ? { upload_id: uploadId } : {}),
     bucket: requiredText(upload.bucket, 'upload.bucket'),
     object_key: requiredText(upload.object_key, 'upload.object_key'),
     checksum_sha256: requiredText(upload.checksum_sha256, 'upload.checksum_sha256').toLowerCase(),

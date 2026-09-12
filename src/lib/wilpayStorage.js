@@ -27,6 +27,7 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/png',
   'image/webp'
 ]);
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function safeSegment(value, label) {
   const normalized = String(value ?? '').trim();
@@ -66,6 +67,23 @@ function normalizeChecksum(checksumSha256, { required = false } = {}) {
   const normalized = String(checksumSha256).trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(normalized)) throw new Error('Invalid checksumSha256');
   return normalized;
+}
+
+function normalizeUploadId(uploadId, { required = false } = {}) {
+  if (uploadId == null || uploadId === '') {
+    if (required) throw new Error('uploadId is required for new private uploads');
+    return null;
+  }
+  const normalized = String(uploadId).trim().toLowerCase();
+  if (!UUID_V4_PATTERN.test(normalized)) throw new Error('Invalid uploadId');
+  return normalized;
+}
+
+function resolveUploadId(uploadId, randomUUID) {
+  if (uploadId != null && uploadId !== '') return normalizeUploadId(uploadId, { required: true });
+  const generator = randomUUID ?? globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+  if (typeof generator !== 'function') throw new Error('Secure upload id generation is unavailable');
+  return normalizeUploadId(generator(), { required: true });
 }
 
 function normalizeCreatedAt(createdAt) {
@@ -108,12 +126,15 @@ export async function prepareWilpayPrivateUpload({
   fileId,
   file,
   storageProvider,
-  createdAt
+  createdAt,
+  uploadId,
+  randomUUID
 }) {
   const canonicalKind = normalizeKind(kind);
   const maxBytes = maxBytesForKind(canonicalKind);
   validateWilpayUpload(file, { maxBytes });
   const checksumSha256 = await sha256WilpayFile(file, { maxBytes });
+  const immutableUploadId = resolveUploadId(uploadId, randomUUID);
   const metadata = buildWilpayFileMetadata({
     userId,
     loanId,
@@ -122,7 +143,8 @@ export async function prepareWilpayPrivateUpload({
     file,
     checksumSha256,
     storageProvider,
-    createdAt
+    createdAt,
+    uploadId: immutableUploadId
   });
   assertWilpayFileMetadata(metadata);
   return Object.freeze({
@@ -149,14 +171,17 @@ export function buildWilpayFileMetadata({
   file,
   checksumSha256,
   storageProvider,
-  createdAt
+  createdAt,
+  uploadId
 }) {
   const canonicalKind = normalizeKind(kind);
   const { size, mimeType } = validateWilpayUpload(file, { maxBytes: maxBytesForKind(canonicalKind) });
   const safeProvider = safeSegment(storageProvider, 'storageProvider');
   const objectKey = buildWilpayObjectKey({ userId, loanId, kind: canonicalKind, fileId, mimeType });
+  const normalizedUploadId = normalizeUploadId(uploadId);
   return {
     file_id: safeSegment(fileId, 'fileId'),
+    ...(normalizedUploadId ? { upload_id: normalizedUploadId } : {}),
     owner_user_id: safeSegment(userId, 'userId'),
     loan_id: safeSegment(loanId, 'loanId'),
     document_type: canonicalKind,
@@ -181,6 +206,7 @@ export function assertWilpayFileMetadata(metadata) {
   }
   if (metadata.bucket !== STORAGE_BUCKET) throw new Error('Metadata bucket must remain W.I.L Pay private');
   safeSegment(metadata.storage_provider, 'storageProvider');
+  if (metadata.upload_id != null) normalizeUploadId(metadata.upload_id, { required: true });
   const documentType = metadata.document_type ?? metadata.kind;
   const canonicalDocumentType = normalizeKind(documentType);
   if (documentType !== canonicalDocumentType) {

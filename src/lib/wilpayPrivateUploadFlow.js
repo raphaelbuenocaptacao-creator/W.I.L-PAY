@@ -108,6 +108,7 @@ export async function uploadWilpayFileToPrivateStorage({
     const auditEvent = Object.freeze({
       event_type: 'private_upload_completed',
       file_id: uploaded.file_id,
+      upload_id: prepared.metadata.upload_id,
       owner_user_id: prepared.metadata.owner_user_id,
       loan_id: prepared.metadata.loan_id,
       document_type: prepared.metadata.document_type,
@@ -126,6 +127,7 @@ export async function uploadWilpayFileToPrivateStorage({
 
   return Object.freeze({
     file_id: uploaded.file_id,
+    upload_id: prepared.metadata.upload_id,
     bucket: uploaded.bucket,
     object_key: uploaded.object_key,
     checksum_sha256: uploaded.checksum_sha256,
