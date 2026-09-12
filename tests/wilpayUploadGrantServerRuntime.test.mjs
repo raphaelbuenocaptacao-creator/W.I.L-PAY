@@ -36,6 +36,7 @@ const binding = {
     storage_provider: 'private-object-storage',
     storage_resource_id: 'wilpay-storage-resource',
     storage_provider_binding: 'wilpay-storage-binding',
+    storage_endpoint_origin: 'https://storage.example.invalid',
     storage_bucket: 'wilpay-private-documents',
     approved_exclusive_storage_resource_ids: ['wilpay-storage-resource'],
     approved_exclusive_storage_bindings: ['wilpay-storage-binding'],
@@ -112,6 +113,7 @@ assert.deepEqual(calls[2][2], {
   provider: 'private-object-storage',
   resource_id: 'wilpay-storage-resource',
   provider_binding: 'wilpay-storage-binding',
+  endpoint_origin: 'https://storage.example.invalid',
   bucket: 'wilpay-private-documents',
   root_prefix: 'wilpay/production'
 }, 'signer must receive the exact approved storage scope');
@@ -243,6 +245,15 @@ await assert.rejects(
   ),
   /credentials/i,
   'private upload grants must never expose URL-embedded credentials'
+);
+
+await assert.rejects(
+  createUnsafeUrlRuntime('https://attacker.example.invalid/upload/opaque')(
+    payload,
+    { authenticatedUserId: 'user_123' }
+  ),
+  /storage endpoint origin mismatch/i,
+  'signed upload URL must be restricted to the approved private storage origin'
 );
 
 console.log('PASS wilpayUploadGrantServerRuntime');
