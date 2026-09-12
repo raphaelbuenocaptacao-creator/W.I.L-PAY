@@ -57,7 +57,8 @@ const observedStorageIdentity = {
   provider_binding: 'wilpay-storage-binding',
   endpoint_origin: 'https://storage.wilpay.example',
   bucket: 'wilpay-private-documents',
-  root_prefix: 'wilpay/production'
+  root_prefix: 'wilpay/production',
+  private_access_enforced: true
 };
 
 const before = JSON.stringify(binding);
@@ -85,6 +86,15 @@ const blocked = readinessModule.createWilpayPrivateRuntimeReadiness({
 });
 assert.equal(blocked.ready, false);
 assert.ok(blocked.reasons.includes('storage_identity_mismatch'));
+
+const publicBucket = readinessModule.createWilpayPrivateRuntimeReadiness({
+  binding,
+  observedDatabaseIdentity,
+  observedStorageIdentity: { ...observedStorageIdentity, private_access_enforced: false },
+  transportStatus: { endpoint_configured: true, upload_origins_configured: true }
+});
+assert.equal(publicBucket.ready, false, 'runtime must fail closed when private bucket access is not observed');
+assert.ok(publicBucket.reasons.includes('storage_private_access_unverified'));
 
 const endpointMismatch = readinessModule.createWilpayPrivateRuntimeReadiness({
   binding,
@@ -134,6 +144,7 @@ const serverEnv = {
   WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN: 'https://storage.wilpay.example',
   WILPAY_SERVER_STORAGE_BUCKET: 'wilpay-private-documents',
   WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
+  WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: 'true',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
@@ -143,6 +154,13 @@ assert.equal(serverReady.ready, true);
 assert.equal(serverReady.endpoint_configured, true);
 assert.equal(serverReady.upload_origins_configured, true);
 assert.deepEqual(serverReady.reasons, []);
+
+const serverPublicBucket = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: 'false' }
+});
+assert.equal(serverPublicBucket.ready, false);
+assert.ok(serverPublicBucket.reasons.includes('storage_private_access_unverified'));
 
 const serverEndpointMismatch = readinessModule.createWilpayServerRuntimeReadiness({
   binding,
@@ -165,5 +183,12 @@ const malformedServerFlag = readinessModule.createWilpayServerRuntimeReadiness({
 assert.equal(malformedServerFlag.ready, false);
 assert.equal(malformedServerFlag.endpoint_configured, false);
 assert.ok(malformedServerFlag.reasons.includes('server_transport_flag_invalid'));
+
+const missingPrivateEvidence = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: undefined }
+});
+assert.equal(missingPrivateEvidence.ready, false);
+assert.ok(missingPrivateEvidence.reasons.includes('server_storage_private_flag_invalid'));
 
 console.log('W.I.L Pay private runtime readiness tests passed');
