@@ -5,6 +5,7 @@ const trustedMetadata = {
   owner_user_id: 'user_1',
   loan_id: 'loan_1',
   document_type: 'document',
+  upload_id: '4f4f5bf1-90d2-46d8-b2d4-66dc9c0e5321',
   storage_provider: 'private-provider',
   bucket: 'wilpay-private-documents',
   object_key: 'wilpay/production/user_1/documents/file_1',
@@ -45,6 +46,7 @@ assert.match(calls[0].sql, /^SELECT\b/i);
 assert.match(calls[0].sql, /owner_user_id/i);
 assert.match(calls[0].sql, /loan_id/i);
 assert.match(calls[0].sql, /document_type/i);
+assert.match(calls[0].sql, /upload_id/i);
 assert.match(calls[0].sql, /FROM wilpay\.file_metadata/i);
 assert.match(calls[0].sql, /status = 'active'/i);
 assert.match(calls[0].sql, /storage_verified_at IS NULL/i);
@@ -63,6 +65,7 @@ assert.match(calls[1].sql, /uploaded_at = \$10::timestamptz/i);
 assert.match(calls[1].sql, /owner_user_id = \$11/i);
 assert.match(calls[1].sql, /loan_id = \$12/i);
 assert.match(calls[1].sql, /document_type = \$13/i);
+assert.match(calls[1].sql, /upload_id = \$14::uuid/i);
 assert.deepEqual(calls[1].params, [
   'file_1',
   trustedMetadata.checksum_sha256,
@@ -76,7 +79,8 @@ assert.deepEqual(calls[1].params, [
   trustedMetadata.uploaded_at,
   trustedMetadata.owner_user_id,
   trustedMetadata.loan_id,
-  trustedMetadata.document_type
+  trustedMetadata.document_type,
+  trustedMetadata.upload_id
 ]);
 
 await assert.rejects(
