@@ -205,4 +205,44 @@ await assert.rejects(
   'a signer must not attest a different storage resource'
 );
 
+function createUnsafeUrlRuntime(uploadUrl) {
+  return createWilpayUploadGrantServerRuntime({
+    query: async () => ({ rows: [{ issued: true }] }),
+    infrastructureBinding: binding,
+    serverEnv: env,
+    consumeGrantNonce: async () => true,
+    signPrivateUpload: async (authorized) => ({
+      request_id: authorized.request_id,
+      upload_id: authorized.upload_id,
+      storage_resource_id: 'wilpay-storage-resource',
+      bucket: authorized.bucket,
+      object_key: authorized.object_key,
+      content_type: authorized.content_type,
+      checksum_sha256: authorized.checksum_sha256,
+      method: 'PUT',
+      upload_url: uploadUrl,
+      expires_at: new Date(nowMs + 5 * 60 * 1000).toISOString()
+    }),
+    now: () => nowMs
+  });
+}
+
+await assert.rejects(
+  createUnsafeUrlRuntime('http://storage.example.invalid/upload/opaque')(
+    payload,
+    { authenticatedUserId: 'user_123' }
+  ),
+  /https/i,
+  'private upload grants must never expose a non-HTTPS upload URL'
+);
+
+await assert.rejects(
+  createUnsafeUrlRuntime('https://user:password@storage.example.invalid/upload/opaque')(
+    payload,
+    { authenticatedUserId: 'user_123' }
+  ),
+  /credentials/i,
+  'private upload grants must never expose URL-embedded credentials'
+);
+
 console.log('PASS wilpayUploadGrantServerRuntime');
