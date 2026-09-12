@@ -31,7 +31,8 @@ function requiredTimestamp(value, label) {
  * `query` must be bound to the exclusive W.I.L Pay database connection. This adapter
  * accepts no credentials and persists only verification metadata. The UPDATE is
  * intentionally conditional so a concurrent lifecycle, upload-version, object-identity,
- * size or checksum change cannot cause stale verification evidence to be persisted.
+ * ownership/loan binding, size or checksum change cannot cause stale verification
+ * evidence to be persisted.
  */
 export function createWilpayStorageVerificationPersistence({ query } = {}) {
   if (typeof query !== 'function') {
@@ -53,6 +54,9 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
     const expectedObjectKey = requiredText(raw.expected_object_key, 'verification expected_object_key');
     const expectedSize = requiredPositiveInteger(raw.expected_size_bytes, 'verification expected_size_bytes');
     const expectedUploadedAt = requiredTimestamp(raw.expected_uploaded_at, 'verification expected_uploaded_at');
+    const expectedOwnerUserId = requiredText(raw.expected_owner_user_id, 'verification expected_owner_user_id');
+    const expectedLoanId = requiredText(raw.expected_loan_id, 'verification expected_loan_id');
+    const expectedDocumentType = requiredText(raw.expected_document_type, 'verification expected_document_type');
 
     const evidence = raw.evidence;
     if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
@@ -88,7 +92,10 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
         AND bucket = $7
         AND object_key = $8
         AND size_bytes = $9
-        AND uploaded_at = $10::timestamptz`;
+        AND uploaded_at = $10::timestamptz
+        AND owner_user_id = $11
+        AND loan_id = $12
+        AND document_type = $13`;
 
     const params = Object.freeze([
       fileId,
@@ -100,7 +107,10 @@ export function createWilpayStorageVerificationPersistence({ query } = {}) {
       expectedBucket,
       expectedObjectKey,
       expectedSize,
-      expectedUploadedAt
+      expectedUploadedAt,
+      expectedOwnerUserId,
+      expectedLoanId,
+      expectedDocumentType
     ]);
 
     const result = await query(sql, params);
