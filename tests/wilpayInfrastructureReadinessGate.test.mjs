@@ -50,6 +50,14 @@ assert.equal(ready.ready, true, 'fully allowlisted, identity-matched and fingerp
 assert.equal(ready.status, 'READY');
 assert.deepEqual(ready.reasons, []);
 
+const nonCanonicalStorageOrigin = structuredClone(approved);
+nonCanonicalStorageOrigin.isolation.storage_endpoint_origin = 'https://storage.wilpay.example/private-upload';
+nonCanonicalStorageOrigin.isolation.storage_observed_identity.endpoint_origin = 'https://storage.wilpay.example/private-upload';
+nonCanonicalStorageOrigin.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(nonCanonicalStorageOrigin);
+const rejectedNonCanonicalOrigin = evaluateWilpayInfrastructureReadiness(nonCanonicalStorageOrigin);
+assert.equal(rejectedNonCanonicalOrigin.ready, false, 'approved Storage endpoint must be a canonical HTTPS origin without a path');
+assert.equal(rejectedNonCanonicalOrigin.reasons.includes('storage_endpoint_origin_invalid'), true);
+
 const missingObservedIdentity = structuredClone(approved);
 delete missingObservedIdentity.isolation.database_observed_identity;
 missingObservedIdentity.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(missingObservedIdentity);
