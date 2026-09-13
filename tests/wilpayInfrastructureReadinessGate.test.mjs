@@ -87,6 +87,21 @@ assert.equal(ready.ready, true, 'fully allowlisted, identity-matched and fingerp
 assert.equal(ready.status, 'READY');
 assert.deepEqual(ready.reasons, []);
 
+const tamperedRestoreEvidence = structuredClone(approved);
+tamperedRestoreEvidence.isolation.storage_observed_identity.restore_evidence.evidence_ref = `sha256:${'0'.repeat(64)}`;
+const rejectedTamperedRestoreEvidence = evaluateWilpayInfrastructureReadiness(tamperedRestoreEvidence);
+assert.equal(rejectedTamperedRestoreEvidence.ready, false, 'readiness must fail closed when restore evidence digest is tampered');
+assert.equal(
+  rejectedTamperedRestoreEvidence.reasons.includes('storage_restore_evidence_mismatch'),
+  true,
+  'tampered restore evidence must be classified as a storage restore evidence mismatch'
+);
+assert.equal(
+  rejectedTamperedRestoreEvidence.reasons.includes('resource_identity_incomplete'),
+  false,
+  'restore evidence tampering must not be hidden behind a generic resource identity failure'
+);
+
 const publicStorage = structuredClone(approved);
 publicStorage.isolation.storage_observed_identity.private_access_enforced = false;
 publicStorage.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(publicStorage);
