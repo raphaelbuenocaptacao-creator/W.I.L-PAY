@@ -44,7 +44,12 @@ function approvedBinding() {
     },
     readiness: { approval: { status: 'APPROVED', approved_by: 'infrastructure-owner', approved_at: new Date().toISOString(), evidence_ref: 'approval-record', resource_fingerprint: null } }
   };
-  binding.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(binding);
+  const resourceFingerprint = computeWilpayResourceFingerprint(binding);
+  binding.readiness.approval.resource_fingerprint = resourceFingerprint;
+  binding.isolation.storage_observed_identity.restore_evidence = {
+    resource_id: binding.isolation.storage_resource_id,
+    resource_fingerprint: resourceFingerprint
+  };
   return binding;
 }
 
@@ -74,8 +79,27 @@ sevenDayPolicy.isolation.storage_restore_policy_lock.max_restore_drill_age_days 
 sevenDayPolicy.isolation.storage_observed_identity.restore_policy.max_restore_drill_age_days = 7;
 sevenDayPolicy.isolation.storage_observed_identity.last_verified_restore_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
 sevenDayPolicy.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(sevenDayPolicy);
+sevenDayPolicy.isolation.storage_observed_identity.restore_evidence.resource_fingerprint = sevenDayPolicy.readiness.approval.resource_fingerprint;
 const blockedByApprovedAge = evaluateWilpayInfrastructureReadiness(sevenDayPolicy);
 assert.equal(blockedByApprovedAge.ready, false, 'restore drill freshness must follow the approved restore policy instead of a fixed 30-day limit');
 assert.ok(blockedByApprovedAge.reasons.includes('storage_restore_drill_stale'));
+
+const wrongRestoreResource = approvedBinding();
+wrongRestoreResource.isolation.storage_observed_identity.restore_evidence.resource_id = 'storage-from-another-project';
+const blockedWrongResource = evaluateWilpayInfrastructureReadiness(wrongRestoreResource);
+assert.equal(blockedWrongResource.ready, false, 'restore evidence from another Storage resource must never satisfy readiness');
+assert.ok(blockedWrongResource.reasons.includes('storage_restore_evidence_mismatch'));
+
+const wrongRestoreFingerprint = approvedBinding();
+wrongRestoreFingerprint.isolation.storage_observed_identity.restore_evidence.resource_fingerprint = '0'.repeat(64);
+const blockedWrongFingerprint = evaluateWilpayInfrastructureReadiness(wrongRestoreFingerprint);
+assert.equal(blockedWrongFingerprint.ready, false, 'restore evidence must be bound to the approved infrastructure fingerprint');
+assert.ok(blockedWrongFingerprint.reasons.includes('storage_restore_evidence_mismatch'));
+
+const missingRestoreEvidence = approvedBinding();
+delete missingRestoreEvidence.isolation.storage_observed_identity.restore_evidence;
+const blockedMissingEvidence = evaluateWilpayInfrastructureReadiness(missingRestoreEvidence);
+assert.equal(blockedMissingEvidence.ready, false, 'restore readiness must fail closed when resource-bound evidence is missing');
+assert.ok(blockedMissingEvidence.reasons.includes('storage_restore_evidence_unverified'));
 
 console.log('W.I.L Pay storage restore runtime readiness checks: PASS');
