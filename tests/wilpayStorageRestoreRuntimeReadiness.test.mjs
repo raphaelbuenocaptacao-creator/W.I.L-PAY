@@ -7,7 +7,8 @@ function approvedBinding() {
     policy_id: 'wilpay-private-restore-v1',
     max_restore_drill_age_days: 30,
     restore_to_isolated_prefix_required: true,
-    destructive_restore_overwrite_forbidden: true
+    destructive_restore_overwrite_forbidden: true,
+    evidence_ref_scheme: 'sha256'
   };
 
   const binding = {
@@ -50,7 +51,7 @@ function approvedBinding() {
     resource_id: binding.isolation.storage_resource_id,
     resource_fingerprint: resourceFingerprint,
     verified_at: binding.isolation.storage_observed_identity.last_verified_restore_at,
-    evidence_ref: 'restore-drill/audit/2026-09-13'
+    evidence_ref: `sha256:${'a'.repeat(64)}`
   };
   return binding;
 }
@@ -111,6 +112,11 @@ delete missingEvidenceRef.isolation.storage_observed_identity.restore_evidence.e
 const blockedMissingEvidenceRef = evaluateWilpayInfrastructureReadiness(missingEvidenceRef);
 assert.equal(blockedMissingEvidenceRef.ready, false, 'restore readiness must fail closed without an auditable restore-drill evidence reference');
 assert.ok(blockedMissingEvidenceRef.reasons.includes('storage_restore_evidence_unverified'));
+
+const mutableEvidenceRef = approvedBinding();
+mutableEvidenceRef.isolation.storage_observed_identity.restore_evidence.evidence_ref = 'restore-drill/audit/latest';
+const blockedMutableEvidenceRef = evaluateWilpayInfrastructureReadiness(mutableEvidenceRef);
+assert.equal(blockedMutableEvidenceRef.ready, false, 'restore readiness must reject mutable evidence references when the approved policy requires sha256');
 
 const mismatchedEvidenceTimestamp = approvedBinding();
 mismatchedEvidenceTimestamp.isolation.storage_observed_identity.restore_evidence.verified_at = '2026-09-01T00:00:00.000Z';
