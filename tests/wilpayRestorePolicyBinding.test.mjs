@@ -79,7 +79,9 @@ function approvedBinding() {
   binding.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(binding);
   binding.isolation.storage_observed_identity.restore_evidence = {
     resource_id: binding.isolation.storage_resource_id,
-    resource_fingerprint: binding.readiness.approval.resource_fingerprint
+    resource_fingerprint: binding.readiness.approval.resource_fingerprint,
+    verified_at: binding.isolation.storage_observed_identity.last_verified_restore_at,
+    evidence_ref: 'restore-drill/audit/restore-policy-fixture'
   };
   return binding;
 }
@@ -103,6 +105,7 @@ assert.ok(missingResult.reasons.includes('storage_restore_policy_unverified'));
 const serverBinding = approvedBinding();
 delete serverBinding.isolation.database_observed_identity;
 delete serverBinding.isolation.storage_observed_identity;
+const serverRestoreVerifiedAt = new Date().toISOString();
 const serverEnv = {
   WILPAY_SERVER_NEON_PROJECT_NAME: 'wilpay-production',
   WILPAY_SERVER_NEON_REGION_ID: 'us-east-2',
@@ -120,13 +123,15 @@ const serverEnv = {
   WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'true',
   WILPAY_SERVER_STORAGE_RESTORE_CAPABILITY_VERIFIED: 'true',
   WILPAY_SERVER_STORAGE_RESTORE_DRILL_VERIFIED: 'true',
-  WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT: new Date().toISOString(),
+  WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT: serverRestoreVerifiedAt,
   WILPAY_SERVER_STORAGE_RESTORE_POLICY_ID: 'wilpay-private-restore-v1',
   WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS: '30',
   WILPAY_SERVER_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED: 'true',
   WILPAY_SERVER_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN: 'true',
   WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID: 'wilpay-storage-resource',
   WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT: serverBinding.readiness.approval.resource_fingerprint,
+  WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_VERIFIED_AT: serverRestoreVerifiedAt,
+  WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_REF: 'restore-drill/audit/restore-policy-server-fixture',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
