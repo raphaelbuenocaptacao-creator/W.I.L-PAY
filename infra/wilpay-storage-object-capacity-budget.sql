@@ -50,6 +50,7 @@ SELECT
   required_objects_with_reserve,
   forecast_sample_ready,
   CASE
+    WHEN target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
     WHEN provider_object_quota IS NULL THEN 'UNCONFIGURED'
     WHEN NOT forecast_sample_ready THEN 'INSUFFICIENT_SAMPLE'
     WHEN provider_object_quota >= required_objects_with_reserve THEN 'READY'
