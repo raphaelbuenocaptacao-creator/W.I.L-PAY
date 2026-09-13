@@ -11,6 +11,13 @@ function presentEvidenceValue(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function canonicalUtcIsoTimestamp(value) {
+  if (!presentEvidenceValue(value)) return false;
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return false;
+  return new Date(parsed).toISOString() === value;
+}
+
 export function validateWilpayRestoreEvidenceReference(isolation, restorePolicy) {
   if (restorePolicy?.evidence_ref_scheme !== 'sha256') return;
 
@@ -53,8 +60,8 @@ export function validateWilpayRestoreEvidenceReference(isolation, restorePolicy)
     'storage_observed_identity.restore_evidence.execution_id'
   );
 
-  if (Number.isNaN(Date.parse(verifiedAt))) {
-    throw new Error('W.I.L Pay restore evidence manifest requires a valid verified_at timestamp');
+  if (!canonicalUtcIsoTimestamp(verifiedAt)) {
+    throw new Error('W.I.L Pay restore evidence manifest requires a canonical UTC ISO timestamp for verified_at');
   }
   if (result !== 'PASS') {
     throw new Error('W.I.L Pay restore evidence manifest requires a successful restore result');
@@ -87,8 +94,7 @@ export function classifyWilpayRestoreEvidence(isolation, restorePolicy) {
     Number.isInteger(restoreEvidence.schema_version) &&
     presentEvidenceValue(restoreEvidence.resource_id) &&
     presentEvidenceValue(restoreEvidence.resource_fingerprint) &&
-    presentEvidenceValue(restoreEvidence.verified_at) &&
-    !Number.isNaN(Date.parse(restoreEvidence.verified_at)) &&
+    canonicalUtcIsoTimestamp(restoreEvidence.verified_at) &&
     presentEvidenceValue(restoreEvidence.result) &&
     presentEvidenceValue(restoreEvidence.execution_id) &&
     presentEvidenceValue(restoreEvidence.evidence_ref);
