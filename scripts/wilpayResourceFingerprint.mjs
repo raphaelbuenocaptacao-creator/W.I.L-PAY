@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { validateWilpayRestoreEvidenceReference } from './wilpayRestoreEvidence.mjs';
 
 function requireIdentity(value, label) {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -39,7 +38,6 @@ export function computeWilpayResourceFingerprint(binding) {
   const databaseLock = isolation.database_identity_lock ?? {};
   const storageLayout = isolation.storage_layout ?? {};
   const restorePolicy = restorePolicyLock(isolation);
-  validateWilpayRestoreEvidenceReference(isolation, restorePolicy);
 
   const identity = {
     fingerprint_version: 3,
