@@ -159,10 +159,13 @@ function storageIdentityStatus(isolation, approvedResourceFingerprint) {
   if (
     !restoreEvidence ||
     typeof restoreEvidence !== 'object' ||
+    !Number.isInteger(restoreEvidence.schema_version) ||
     !present(restoreEvidence.resource_id) ||
     !present(restoreEvidence.resource_fingerprint) ||
     !present(restoreEvidence.verified_at) ||
     Number.isNaN(Date.parse(restoreEvidence.verified_at)) ||
+    !present(restoreEvidence.result) ||
+    !present(restoreEvidence.execution_id) ||
     !present(restoreEvidence.evidence_ref) ||
     !present(approvedResourceFingerprint)
   ) {
@@ -355,9 +358,12 @@ const CLIENT_EXPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
   'VITE_WILPAY_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS',
   'VITE_WILPAY_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED',
   'VITE_WILPAY_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN',
+  'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_SCHEMA_VERSION',
   'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID',
   'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT',
   'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_VERIFIED_AT',
+  'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_RESULT',
+  'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_EXECUTION_ID',
   'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_REF',
   'VITE_WILPAY_PRIVATE_STORAGE_ENDPOINT_CONFIGURED',
   'VITE_WILPAY_UPLOAD_ORIGINS_CONFIGURED'
@@ -397,6 +403,7 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   const destructiveRestoreOverwriteFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN');
   const restoreDrillAge = parseServerPositiveInteger(serverEnv, 'WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS');
   const restorePolicyRequired = Boolean(binding?.isolation?.storage_restore_policy_lock);
+  const restoreEvidenceSchemaVersion = serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_SCHEMA_VERSION === '1' ? 1 : null;
 
   const base = createWilpayPrivateRuntimeReadiness({
     binding,
@@ -430,9 +437,12 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
         : undefined,
       restore_evidence: restorePolicyRequired
         ? {
+            schema_version: restoreEvidenceSchemaVersion,
             resource_id: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID,
             resource_fingerprint: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT,
             verified_at: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_VERIFIED_AT,
+            result: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESULT,
+            execution_id: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_EXECUTION_ID,
             evidence_ref: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_REF
           }
         : undefined
@@ -463,10 +473,13 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   }
   if (
     restorePolicyRequired &&
-    (!present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID) ||
+    (restoreEvidenceSchemaVersion !== 1 ||
+      !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID) ||
       !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT) ||
       !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_VERIFIED_AT) ||
       Number.isNaN(Date.parse(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_VERIFIED_AT)) ||
+      serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESULT !== 'PASS' ||
+      !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_EXECUTION_ID) ||
       !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_REF))
   ) {
     reasons.push('server_storage_restore_evidence_invalid');
