@@ -64,6 +64,12 @@ candidate.isolation.storage_provider = 'private-storage-provider';
 candidate.isolation.storage_resource_id = 'storage-wilpay-exclusive';
 candidate.isolation.storage_provider_binding = 'binding-wilpay-production';
 candidate.isolation.storage_endpoint_origin = 'https://storage.wilpay.example';
+candidate.isolation.storage_restore_policy_lock = {
+  policy_id: 'wilpay-private-restore-v1',
+  max_restore_drill_age_days: 30,
+  restore_to_isolated_prefix_required: true,
+  destructive_restore_overwrite_forbidden: true
+};
 
 const fingerprint = computeWilpayResourceFingerprint(candidate);
 assert.match(fingerprint, /^[a-f0-9]{64}$/i, 'fingerprint must be a SHA-256 hex digest');
@@ -87,6 +93,14 @@ assert.notEqual(
   computeWilpayResourceFingerprint(changedStorageOrigin),
   fingerprint,
   'changing the approved Storage endpoint origin must invalidate the fingerprint'
+);
+
+const changedRestorePolicy = structuredClone(candidate);
+changedRestorePolicy.isolation.storage_restore_policy_lock.max_restore_drill_age_days = 14;
+assert.notEqual(
+  computeWilpayResourceFingerprint(changedRestorePolicy),
+  fingerprint,
+  'changing the approved restore policy must invalidate the resource fingerprint'
 );
 
 assert.throws(
