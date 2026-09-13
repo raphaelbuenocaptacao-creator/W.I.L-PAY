@@ -9,15 +9,27 @@ assert.equal(
 );
 
 const fingerprintSource = readFileSync(new URL('../scripts/wilpayResourceFingerprint.mjs', import.meta.url), 'utf8');
-assert.match(
+assert.doesNotMatch(
   fingerprintSource,
-  /from '\.\/wilpayRestoreEvidence\.mjs'/,
-  'resource fingerprinting must delegate restore evidence verification to the dedicated module'
+  /wilpayRestoreEvidence\.mjs/,
+  'resource fingerprinting must remain independent from operational restore evidence verification'
 );
 assert.doesNotMatch(
   fingerprintSource,
-  /function validateRestoreEvidenceReference\(/,
-  'resource fingerprinting must not own restore evidence verification internals'
+  /validateWilpayRestoreEvidenceReference/,
+  'resource fingerprinting must not validate restore evidence'
+);
+
+const readinessSource = readFileSync(new URL('../scripts/wilpayInfrastructureReadinessGate.mjs', import.meta.url), 'utf8');
+assert.match(
+  readinessSource,
+  /from '\.\/wilpayRestoreEvidence\.mjs'/,
+  'readiness must consume the dedicated restore evidence verifier directly'
+);
+assert.match(
+  readinessSource,
+  /validateWilpayRestoreEvidenceReference\(isolation, isolation\.storage_restore_policy_lock\)/,
+  'readiness must cryptographically validate restore evidence before declaring Storage ready'
 );
 
 const { validateWilpayRestoreEvidenceReference } = await import('../scripts/wilpayRestoreEvidence.mjs');
