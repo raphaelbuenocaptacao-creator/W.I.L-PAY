@@ -156,16 +156,20 @@ function storageIdentityStatus(isolation, approvedResourceFingerprint) {
   }
 
   const restoreEvidence = observed.restore_evidence;
+  const canonicalRestoreEvidenceRequired = isolation.storage_restore_policy_lock?.evidence_ref_scheme === 'sha256';
+  const canonicalRestoreEvidenceIncomplete =
+    canonicalRestoreEvidenceRequired &&
+    (!Number.isInteger(restoreEvidence?.schema_version) ||
+      !present(restoreEvidence?.result) ||
+      !present(restoreEvidence?.execution_id));
   if (
     !restoreEvidence ||
     typeof restoreEvidence !== 'object' ||
-    !Number.isInteger(restoreEvidence.schema_version) ||
+    canonicalRestoreEvidenceIncomplete ||
     !present(restoreEvidence.resource_id) ||
     !present(restoreEvidence.resource_fingerprint) ||
     !present(restoreEvidence.verified_at) ||
     Number.isNaN(Date.parse(restoreEvidence.verified_at)) ||
-    !present(restoreEvidence.result) ||
-    !present(restoreEvidence.execution_id) ||
     !present(restoreEvidence.evidence_ref) ||
     !present(approvedResourceFingerprint)
   ) {
