@@ -17,7 +17,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>
 );
 
-const APP_VERSION = 'v38-private-vary-range-safe';
+const APP_VERSION = 'v39-private-vary-range-safe';
 let deferredInstallPrompt = null;
 
 window.addEventListener('beforeinstallprompt', event => {
