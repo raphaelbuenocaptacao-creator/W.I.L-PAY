@@ -6,6 +6,9 @@ const sql = fs.readFileSync(new URL('../infra/wilpay-storage-object-capacity-bud
 assert.match(sql, /CREATE TABLE IF NOT EXISTS wilpay\.storage_object_capacity_config/);
 assert.match(sql, /target_complete_clients integer NOT NULL DEFAULT 1000/);
 assert.match(sql, /provider_object_quota bigint/);
+assert.match(sql, /verification_evidence_sha256 text/);
+assert.match(sql, /verification_evidence_sha256 ~ '\^\[0-9a-f\]\{64\}\$'/);
+assert.match(sql, /ALTER TABLE wilpay\.storage_object_capacity_config\s+ADD COLUMN IF NOT EXISTS verification_evidence_sha256 text/);
 assert.match(sql, /wilpay_object_quota_verification_pair/);
 assert.match(sql, /CREATE OR REPLACE VIEW wilpay\.storage_object_capacity_readiness/);
 assert.match(sql, /CROSS JOIN wilpay\.storage_object_count_forecast f/);
@@ -13,6 +16,7 @@ assert.match(sql, /target_complete_clients \* 5/);
 assert.match(sql, /p95_objects_per_complete_client/);
 assert.match(sql, /WHEN target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'/);
 assert.match(sql, /WHEN verified_at IS NULL THEN 'UNVERIFIED_QUOTA'/);
+assert.match(sql, /WHEN verification_evidence_sha256 IS NULL THEN 'UNVERIFIED_QUOTA_EVIDENCE'/);
 assert.match(sql, /WHEN verified_at < now\(\) - interval '7 days' THEN 'STALE_QUOTA_VERIFICATION'/);
 assert.match(sql, /'UNCONFIGURED'/);
 assert.match(sql, /'INSUFFICIENT_SAMPLE'/);
