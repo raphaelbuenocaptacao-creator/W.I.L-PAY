@@ -11,7 +11,9 @@ export function validateWilpayRestoreEvidenceReference(isolation, restorePolicy)
   if (restorePolicy?.evidence_ref_scheme !== 'sha256') return;
 
   const restoreEvidence = isolation?.storage_observed_identity?.restore_evidence;
-  if (!restoreEvidence) return;
+  if (!restoreEvidence) {
+    throw new Error('W.I.L Pay restore evidence is required when sha256 policy is active');
+  }
 
   const evidenceRef = requireEvidenceIdentity(
     restoreEvidence.evidence_ref,
