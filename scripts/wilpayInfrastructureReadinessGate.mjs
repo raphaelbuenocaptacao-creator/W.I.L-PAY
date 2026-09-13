@@ -407,6 +407,7 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   const destructiveRestoreOverwriteFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN');
   const restoreDrillAge = parseServerPositiveInteger(serverEnv, 'WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS');
   const restorePolicyRequired = Boolean(binding?.isolation?.storage_restore_policy_lock);
+  const canonicalRestoreEvidenceRequired = binding?.isolation?.storage_restore_policy_lock?.evidence_ref_scheme === 'sha256';
   const restoreEvidenceSchemaVersion = serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_SCHEMA_VERSION === '1' ? 1 : null;
 
   const base = createWilpayPrivateRuntimeReadiness({
@@ -477,14 +478,15 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   }
   if (
     restorePolicyRequired &&
-    (restoreEvidenceSchemaVersion !== 1 ||
-      !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID) ||
+    (!present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID) ||
       !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT) ||
       !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_VERIFIED_AT) ||
       Number.isNaN(Date.parse(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_VERIFIED_AT)) ||
-      serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESULT !== 'PASS' ||
-      !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_EXECUTION_ID) ||
-      !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_REF))
+      !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_REF) ||
+      (canonicalRestoreEvidenceRequired &&
+        (restoreEvidenceSchemaVersion !== 1 ||
+          serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESULT !== 'PASS' ||
+          !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_EXECUTION_ID))))
   ) {
     reasons.push('server_storage_restore_evidence_invalid');
   }
