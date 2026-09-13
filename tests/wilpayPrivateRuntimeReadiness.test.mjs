@@ -59,6 +59,7 @@ const observedDatabaseIdentity = {
   database_name: 'wilpay',
   role_name: 'wilpay_app'
 };
+const lastVerifiedRestoreAt = new Date().toISOString();
 const observedStorageIdentity = {
   provider: 'private-object-storage',
   resource_id: 'wilpay-storage-resource',
@@ -71,11 +72,13 @@ const observedStorageIdentity = {
   destructive_lifecycle_disabled: true,
   restore_capability_verified: true,
   restore_drill_verified: true,
-  last_verified_restore_at: new Date().toISOString(),
+  last_verified_restore_at: lastVerifiedRestoreAt,
   restore_policy: { ...restorePolicy },
   restore_evidence: {
     resource_id: 'wilpay-storage-resource',
-    resource_fingerprint: binding.readiness.approval.resource_fingerprint
+    resource_fingerprint: binding.readiness.approval.resource_fingerprint,
+    verified_at: lastVerifiedRestoreAt,
+    evidence_ref: 'restore-drill/audit/private-runtime-fixture'
   }
 };
 
