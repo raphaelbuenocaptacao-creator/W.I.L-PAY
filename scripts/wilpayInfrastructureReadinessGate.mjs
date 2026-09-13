@@ -1,7 +1,5 @@
 import { computeWilpayResourceFingerprint } from './wilpayResourceFingerprint.mjs';
 
-const MAX_RESTORE_DRILL_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-
 function present(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -148,17 +146,18 @@ function storageIdentityStatus(isolation) {
     return 'restore_drill_unverified';
   }
 
-  const restoreAgeMs = Date.now() - lastRestoreAt;
-  if (restoreAgeMs < 0 || restoreAgeMs > MAX_RESTORE_DRILL_AGE_MS) {
-    return 'restore_drill_stale';
-  }
-
   const restorePolicy = restorePolicyStatus(isolation, observed);
-  if (restorePolicy === 'unverified') {
+  if (restorePolicy === 'not_required' || restorePolicy === 'unverified') {
     return 'restore_policy_unverified';
   }
   if (restorePolicy === 'mismatch') {
     return 'restore_policy_mismatch';
+  }
+
+  const maxRestoreDrillAgeMs = isolation.storage_restore_policy_lock.max_restore_drill_age_days * 24 * 60 * 60 * 1000;
+  const restoreAgeMs = Date.now() - lastRestoreAt;
+  if (restoreAgeMs < 0 || restoreAgeMs > maxRestoreDrillAgeMs) {
+    return 'restore_drill_stale';
   }
 
   const matches = identityKeys.every((key) => observed[key].trim() === expected[key].trim());
