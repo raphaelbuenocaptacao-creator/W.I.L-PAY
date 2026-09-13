@@ -1,4 +1,5 @@
 import { computeWilpayResourceFingerprint } from './wilpayResourceFingerprint.mjs';
+import { validateWilpayRestoreEvidenceReference } from './wilpayRestoreEvidence.mjs';
 
 function present(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -173,6 +174,12 @@ function storageIdentityStatus(isolation, approvedResourceFingerprint) {
     restoreEvidence.resource_fingerprint.trim() !== approvedResourceFingerprint.trim() ||
     Date.parse(restoreEvidence.verified_at) !== lastRestoreAt
   ) {
+    return 'restore_evidence_mismatch';
+  }
+
+  try {
+    validateWilpayRestoreEvidenceReference(isolation, isolation.storage_restore_policy_lock);
+  } catch {
     return 'restore_evidence_mismatch';
   }
 
