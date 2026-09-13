@@ -4,7 +4,10 @@ import { computeWilpayResourceFingerprint } from '../scripts/wilpayResourceFinge
 import {
   createWilpayServerRuntimeReadiness
 } from '../scripts/wilpayInfrastructureReadinessGate.mjs';
-import { validateWilpayRestoreEvidenceReference } from '../scripts/wilpayRestoreEvidence.mjs';
+import {
+  classifyWilpayRestoreEvidence,
+  validateWilpayRestoreEvidenceReference
+} from '../scripts/wilpayRestoreEvidence.mjs';
 
 const sha256Policy = {
   evidence_ref_scheme: 'sha256'
@@ -73,6 +76,47 @@ const restoreManifest = {
 const evidenceRef = `sha256:${createHash('sha256')
   .update(JSON.stringify(restoreManifest), 'utf8')
   .digest('hex')}`;
+
+const canonicalIsolation = {
+  storage_observed_identity: {
+    restore_evidence: {
+      ...restoreManifest,
+      evidence_ref: evidenceRef
+    }
+  }
+};
+
+assert.equal(
+  classifyWilpayRestoreEvidence(canonicalIsolation, restorePolicy),
+  'verified',
+  'complete canonical restore evidence must classify as verified'
+);
+
+for (const field of ['schema_version', 'result', 'execution_id']) {
+  const incomplete = structuredClone(canonicalIsolation);
+  delete incomplete.storage_observed_identity.restore_evidence[field];
+  assert.equal(
+    classifyWilpayRestoreEvidence(incomplete, restorePolicy),
+    'unverified',
+    `missing ${field} must classify restore evidence as unverified`
+  );
+}
+
+const tamperedExecution = structuredClone(canonicalIsolation);
+tamperedExecution.storage_observed_identity.restore_evidence.execution_id = 'restore-drill-tampered';
+assert.equal(
+  classifyWilpayRestoreEvidence(tamperedExecution, restorePolicy),
+  'mismatch',
+  'present but digest-inconsistent execution_id must classify restore evidence as mismatch'
+);
+
+const failedRestore = structuredClone(canonicalIsolation);
+failedRestore.storage_observed_identity.restore_evidence.result = 'FAIL';
+assert.equal(
+  classifyWilpayRestoreEvidence(failedRestore, restorePolicy),
+  'mismatch',
+  'present but unsuccessful restore result must classify restore evidence as mismatch'
+);
 
 const serverReady = createWilpayServerRuntimeReadiness({
   binding,
