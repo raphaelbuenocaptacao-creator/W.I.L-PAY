@@ -17,6 +17,13 @@ const payload = {
   checksum_sha256: 'c'.repeat(64)
 };
 
+const restorePolicy = {
+  policy_id: 'wilpay-private-restore-v1',
+  max_restore_drill_age_days: 30,
+  restore_to_isolated_prefix_required: true,
+  destructive_restore_overwrite_forbidden: true
+};
+
 const binding = {
   project: 'wilpay',
   environment: 'production',
@@ -40,6 +47,7 @@ const binding = {
     storage_bucket: 'wilpay-private-documents',
     approved_exclusive_storage_resource_ids: ['wilpay-storage-resource'],
     approved_exclusive_storage_bindings: ['wilpay-storage-binding'],
+    storage_restore_policy_lock: { ...restorePolicy },
     storage_layout: { root_prefix: 'wilpay/production' }
   },
   readiness: { approval: {} }
@@ -70,6 +78,10 @@ const env = {
   WILPAY_SERVER_STORAGE_RESTORE_CAPABILITY_VERIFIED: 'true',
   WILPAY_SERVER_STORAGE_RESTORE_DRILL_VERIFIED: 'true',
   WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT: '2026-09-12T09:00:00.000Z',
+  WILPAY_SERVER_STORAGE_RESTORE_POLICY_ID: restorePolicy.policy_id,
+  WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS: String(restorePolicy.max_restore_drill_age_days),
+  WILPAY_SERVER_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED: 'true',
+  WILPAY_SERVER_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN: 'true',
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
