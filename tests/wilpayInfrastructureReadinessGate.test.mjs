@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { computeWilpayResourceFingerprint } from '../scripts/wilpayResourceFingerprint.mjs';
 import { evaluateWilpayInfrastructureReadiness } from '../scripts/wilpayInfrastructureReadinessGate.mjs';
+
+function restoreEvidenceDigest(manifest) {
+  const canonical = {
+    schema_version: manifest.schema_version,
+    resource_id: manifest.resource_id,
+    resource_fingerprint: manifest.resource_fingerprint,
+    verified_at: manifest.verified_at,
+    result: manifest.result,
+    execution_id: manifest.execution_id
+  };
+  return `sha256:${createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')}`;
+}
 
 const raw = await readFile(new URL('../infra/wilpay-infrastructure-binding.json', import.meta.url), 'utf8');
 const binding = JSON.parse(raw);
@@ -56,11 +69,17 @@ approved.readiness.approval.approved_by = 'infrastructure-owner';
 approved.readiness.approval.approved_at = '2026-09-11T06:00:00.000Z';
 approved.readiness.approval.evidence_ref = 'approval-record-001';
 approved.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(approved);
-approved.isolation.storage_observed_identity.restore_evidence = {
+const approvedRestoreManifest = {
+  schema_version: 1,
   resource_id: approved.isolation.storage_resource_id,
   resource_fingerprint: approved.readiness.approval.resource_fingerprint,
   verified_at: approved.isolation.storage_observed_identity.last_verified_restore_at,
-  evidence_ref: `sha256:${'b'.repeat(64)}`
+  result: 'PASS',
+  execution_id: 'readiness-gate-fixture'
+};
+approved.isolation.storage_observed_identity.restore_evidence = {
+  ...approvedRestoreManifest,
+  evidence_ref: restoreEvidenceDigest(approvedRestoreManifest)
 };
 
 const ready = evaluateWilpayInfrastructureReadiness(approved);
