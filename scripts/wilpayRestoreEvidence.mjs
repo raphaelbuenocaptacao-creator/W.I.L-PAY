@@ -7,6 +7,10 @@ function requireEvidenceIdentity(value, label) {
   return value.trim();
 }
 
+function presentEvidenceValue(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 export function validateWilpayRestoreEvidenceReference(isolation, restorePolicy) {
   if (restorePolicy?.evidence_ref_scheme !== 'sha256') return;
 
@@ -70,5 +74,31 @@ export function validateWilpayRestoreEvidenceReference(isolation, restorePolicy)
 
   if (evidenceRef !== expectedRef) {
     throw new Error('W.I.L Pay restore evidence digest does not match the canonical restore manifest');
+  }
+}
+
+export function classifyWilpayRestoreEvidence(isolation, restorePolicy) {
+  if (restorePolicy?.evidence_ref_scheme !== 'sha256') return 'not_required';
+
+  const restoreEvidence = isolation?.storage_observed_identity?.restore_evidence;
+  if (!restoreEvidence || typeof restoreEvidence !== 'object') return 'unverified';
+
+  const complete =
+    Number.isInteger(restoreEvidence.schema_version) &&
+    presentEvidenceValue(restoreEvidence.resource_id) &&
+    presentEvidenceValue(restoreEvidence.resource_fingerprint) &&
+    presentEvidenceValue(restoreEvidence.verified_at) &&
+    !Number.isNaN(Date.parse(restoreEvidence.verified_at)) &&
+    presentEvidenceValue(restoreEvidence.result) &&
+    presentEvidenceValue(restoreEvidence.execution_id) &&
+    presentEvidenceValue(restoreEvidence.evidence_ref);
+
+  if (!complete) return 'unverified';
+
+  try {
+    validateWilpayRestoreEvidenceReference(isolation, restorePolicy);
+    return 'verified';
+  } catch {
+    return 'mismatch';
   }
 }
