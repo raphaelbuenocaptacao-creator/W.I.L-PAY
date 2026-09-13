@@ -48,7 +48,9 @@ function approvedBinding() {
   binding.readiness.approval.resource_fingerprint = resourceFingerprint;
   binding.isolation.storage_observed_identity.restore_evidence = {
     resource_id: binding.isolation.storage_resource_id,
-    resource_fingerprint: resourceFingerprint
+    resource_fingerprint: resourceFingerprint,
+    verified_at: binding.isolation.storage_observed_identity.last_verified_restore_at,
+    evidence_ref: 'restore-drill/audit/2026-09-13'
   };
   return binding;
 }
@@ -70,6 +72,7 @@ assert.ok(blockedDrill.reasons.includes('storage_restore_drill_unverified'));
 
 const staleRestoreDrill = approvedBinding();
 staleRestoreDrill.isolation.storage_observed_identity.last_verified_restore_at = '2020-01-01T00:00:00.000Z';
+staleRestoreDrill.isolation.storage_observed_identity.restore_evidence.verified_at = '2020-01-01T00:00:00.000Z';
 const blockedStale = evaluateWilpayInfrastructureReadiness(staleRestoreDrill);
 assert.equal(blockedStale.ready, false, 'readiness must fail closed when the last restore drill exceeds the approved policy age');
 assert.ok(blockedStale.reasons.includes('storage_restore_drill_stale'));
@@ -78,6 +81,7 @@ const sevenDayPolicy = approvedBinding();
 sevenDayPolicy.isolation.storage_restore_policy_lock.max_restore_drill_age_days = 7;
 sevenDayPolicy.isolation.storage_observed_identity.restore_policy.max_restore_drill_age_days = 7;
 sevenDayPolicy.isolation.storage_observed_identity.last_verified_restore_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+sevenDayPolicy.isolation.storage_observed_identity.restore_evidence.verified_at = sevenDayPolicy.isolation.storage_observed_identity.last_verified_restore_at;
 sevenDayPolicy.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(sevenDayPolicy);
 sevenDayPolicy.isolation.storage_observed_identity.restore_evidence.resource_fingerprint = sevenDayPolicy.readiness.approval.resource_fingerprint;
 const blockedByApprovedAge = evaluateWilpayInfrastructureReadiness(sevenDayPolicy);
@@ -101,5 +105,17 @@ delete missingRestoreEvidence.isolation.storage_observed_identity.restore_eviden
 const blockedMissingEvidence = evaluateWilpayInfrastructureReadiness(missingRestoreEvidence);
 assert.equal(blockedMissingEvidence.ready, false, 'restore readiness must fail closed when resource-bound evidence is missing');
 assert.ok(blockedMissingEvidence.reasons.includes('storage_restore_evidence_unverified'));
+
+const missingEvidenceRef = approvedBinding();
+delete missingEvidenceRef.isolation.storage_observed_identity.restore_evidence.evidence_ref;
+const blockedMissingEvidenceRef = evaluateWilpayInfrastructureReadiness(missingEvidenceRef);
+assert.equal(blockedMissingEvidenceRef.ready, false, 'restore readiness must fail closed without an auditable restore-drill evidence reference');
+assert.ok(blockedMissingEvidenceRef.reasons.includes('storage_restore_evidence_unverified'));
+
+const mismatchedEvidenceTimestamp = approvedBinding();
+mismatchedEvidenceTimestamp.isolation.storage_observed_identity.restore_evidence.verified_at = '2026-09-01T00:00:00.000Z';
+const blockedMismatchedTimestamp = evaluateWilpayInfrastructureReadiness(mismatchedEvidenceTimestamp);
+assert.equal(blockedMismatchedTimestamp.ready, false, 'restore evidence must attest the exact restore-drill timestamp being evaluated');
+assert.ok(blockedMismatchedTimestamp.reasons.includes('storage_restore_evidence_mismatch'));
 
 console.log('W.I.L Pay storage restore runtime readiness checks: PASS');
