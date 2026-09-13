@@ -92,7 +92,7 @@ function restorePolicyStatus(isolation, observed) {
   return matches ? 'verified' : 'mismatch';
 }
 
-function storageIdentityStatus(isolation) {
+function storageIdentityStatus(isolation, approvedResourceFingerprint) {
   const observed = isolation.storage_observed_identity;
   if (!observed || typeof observed !== 'object') {
     return 'unverified';
@@ -154,6 +154,24 @@ function storageIdentityStatus(isolation) {
     return 'restore_policy_mismatch';
   }
 
+  const restoreEvidence = observed.restore_evidence;
+  if (
+    !restoreEvidence ||
+    typeof restoreEvidence !== 'object' ||
+    !present(restoreEvidence.resource_id) ||
+    !present(restoreEvidence.resource_fingerprint) ||
+    !present(approvedResourceFingerprint)
+  ) {
+    return 'restore_evidence_unverified';
+  }
+
+  if (
+    restoreEvidence.resource_id.trim() !== expected.resource_id.trim() ||
+    restoreEvidence.resource_fingerprint.trim() !== approvedResourceFingerprint.trim()
+  ) {
+    return 'restore_evidence_mismatch';
+  }
+
   const maxRestoreDrillAgeMs = isolation.storage_restore_policy_lock.max_restore_drill_age_days * 24 * 60 * 60 * 1000;
   const restoreAgeMs = Date.now() - lastRestoreAt;
   if (restoreAgeMs < 0 || restoreAgeMs > maxRestoreDrillAgeMs) {
@@ -211,7 +229,7 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
       reasons.push('storage_binding_not_allowlisted');
     }
 
-    const identityStatus = storageIdentityStatus(isolation);
+    const identityStatus = storageIdentityStatus(isolation, approval.resource_fingerprint);
     if (identityStatus === 'unverified') {
       reasons.push('storage_identity_unverified');
     } else if (identityStatus === 'invalid_origin') {
@@ -232,6 +250,10 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
       reasons.push('storage_restore_policy_unverified');
     } else if (identityStatus === 'restore_policy_mismatch') {
       reasons.push('storage_restore_policy_mismatch');
+    } else if (identityStatus === 'restore_evidence_unverified') {
+      reasons.push('storage_restore_evidence_unverified');
+    } else if (identityStatus === 'restore_evidence_mismatch') {
+      reasons.push('storage_restore_evidence_mismatch');
     } else if (identityStatus === 'mismatch') {
       reasons.push('storage_identity_mismatch');
     }
@@ -322,6 +344,8 @@ const CLIENT_EXPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
   'VITE_WILPAY_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS',
   'VITE_WILPAY_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED',
   'VITE_WILPAY_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN',
+  'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID',
+  'VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT',
   'VITE_WILPAY_PRIVATE_STORAGE_ENDPOINT_CONFIGURED',
   'VITE_WILPAY_UPLOAD_ORIGINS_CONFIGURED'
 ]);
@@ -390,6 +414,12 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
             restore_to_isolated_prefix_required: restoreIsolatedPrefixFlag.value,
             destructive_restore_overwrite_forbidden: destructiveRestoreOverwriteFlag.value
           }
+        : undefined,
+      restore_evidence: restorePolicyRequired
+        ? {
+            resource_id: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID,
+            resource_fingerprint: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT
+          }
         : undefined
     },
     transportStatus: {
@@ -415,6 +445,13 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
       !destructiveRestoreOverwriteFlag.valid)
   ) {
     reasons.push('server_storage_restore_policy_invalid');
+  }
+  if (
+    restorePolicyRequired &&
+    (!present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID) ||
+      !present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT))
+  ) {
+    reasons.push('server_storage_restore_evidence_invalid');
   }
 
   const ready = base.ready && reasons.length === 0;
