@@ -7,6 +7,7 @@ function approvedBinding() {
     project: 'wilpay',
     environment: 'production',
     isolation: {
+      database_provider: 'neon',
       database_project_id: 'project-wilpay-exclusive',
       database_org_id: 'org-wilpay-exclusive',
       approved_exclusive_database_project_ids: ['project-wilpay-exclusive'],
