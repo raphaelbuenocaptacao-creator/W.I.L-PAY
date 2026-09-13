@@ -1,7 +1,7 @@
 -- W.I.L Pay private storage scale-readiness gate.
 -- Additive and metadata-only. This view combines the verified byte and object-capacity
 -- gates and fails closed when quotas are missing, samples are insufficient, configs
--- diverge, or provider verification is stale.
+-- diverge, the configured target is below 1,000 complete clients, or provider verification is stale.
 
 CREATE OR REPLACE VIEW wilpay.storage_scale_readiness AS
 SELECT
@@ -23,6 +23,7 @@ SELECT
   CASE
     WHEN b.target_complete_clients <> o.target_complete_clients
       OR b.reserve_percent <> o.reserve_percent THEN 'CONFIG_MISMATCH'
+    WHEN b.target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
     WHEN b.provider_quota_bytes IS NULL OR o.provider_object_quota IS NULL THEN 'UNCONFIGURED'
     WHEN b.verified_at IS NULL OR o.verified_at IS NULL THEN 'UNCONFIGURED'
     WHEN b.verified_at < now() - interval '30 days'
@@ -35,6 +36,7 @@ SELECT
   END AS scale_readiness_status,
   (
     b.target_complete_clients = o.target_complete_clients
+    AND b.target_complete_clients >= 1000
     AND b.reserve_percent = o.reserve_percent
     AND b.provider_quota_bytes IS NOT NULL
     AND o.provider_object_quota IS NOT NULL
@@ -51,4 +53,4 @@ CROSS JOIN wilpay.storage_object_capacity_readiness o;
 REVOKE ALL ON wilpay.storage_scale_readiness FROM PUBLIC;
 
 COMMENT ON VIEW wilpay.storage_scale_readiness IS
-  'Fail-closed W.I.L Pay private-storage scale gate. READY requires consistent configs, fresh verified byte/object quotas, sufficient samples and capacity for at least 1,000 complete clients.';
+  'Fail-closed W.I.L Pay private-storage scale gate. READY requires consistent configs, a target of at least 1,000 complete clients, fresh verified byte/object quotas, sufficient samples and capacity.';
