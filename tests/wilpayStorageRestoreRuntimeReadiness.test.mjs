@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { computeWilpayResourceFingerprint } from '../scripts/wilpayResourceFingerprint.mjs';
 import { evaluateWilpayInfrastructureReadiness } from '../scripts/wilpayInfrastructureReadinessGate.mjs';
+
+function restoreEvidenceDigest(manifest) {
+  const canonical = {
+    schema_version: manifest.schema_version,
+    resource_id: manifest.resource_id,
+    resource_fingerprint: manifest.resource_fingerprint,
+    verified_at: manifest.verified_at,
+    result: manifest.result,
+    execution_id: manifest.execution_id
+  };
+  return `sha256:${createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')}`;
+}
 
 function approvedBinding() {
   const restorePolicy = {
@@ -47,11 +60,17 @@ function approvedBinding() {
   };
   const resourceFingerprint = computeWilpayResourceFingerprint(binding);
   binding.readiness.approval.resource_fingerprint = resourceFingerprint;
-  binding.isolation.storage_observed_identity.restore_evidence = {
+  const manifest = {
+    schema_version: 1,
     resource_id: binding.isolation.storage_resource_id,
     resource_fingerprint: resourceFingerprint,
     verified_at: binding.isolation.storage_observed_identity.last_verified_restore_at,
-    evidence_ref: `sha256:${'a'.repeat(64)}`
+    result: 'PASS',
+    execution_id: 'restore-drill-fixture'
+  };
+  binding.isolation.storage_observed_identity.restore_evidence = {
+    ...manifest,
+    evidence_ref: restoreEvidenceDigest(manifest)
   };
   return binding;
 }
@@ -123,5 +142,11 @@ mismatchedEvidenceTimestamp.isolation.storage_observed_identity.restore_evidence
 const blockedMismatchedTimestamp = evaluateWilpayInfrastructureReadiness(mismatchedEvidenceTimestamp);
 assert.equal(blockedMismatchedTimestamp.ready, false, 'restore evidence must attest the exact restore-drill timestamp being evaluated');
 assert.ok(blockedMismatchedTimestamp.reasons.includes('storage_restore_evidence_mismatch'));
+
+const tamperedRestoreResult = approvedBinding();
+tamperedRestoreResult.isolation.storage_observed_identity.restore_evidence.result = 'FAIL';
+const blockedTamperedManifest = evaluateWilpayInfrastructureReadiness(tamperedRestoreResult);
+assert.equal(blockedTamperedManifest.ready, false, 'restore evidence digest must bind the canonical manifest content');
+assert.ok(blockedTamperedManifest.reasons.includes('storage_restore_evidence_mismatch'));
 
 console.log('W.I.L Pay storage restore runtime readiness checks: PASS');
