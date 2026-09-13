@@ -7,6 +7,7 @@ assert.match(sql, /CREATE TABLE IF NOT EXISTS wilpay\.storage_capacity_config/);
 assert.match(sql, /target_complete_clients integer NOT NULL DEFAULT 1000/);
 assert.match(sql, /provider_quota_bytes bigint CHECK \(provider_quota_bytes IS NULL OR provider_quota_bytes > 0\)/);
 assert.match(sql, /VALUES \('primary', 1000, 25\.00, NULL, NULL\)/);
+assert.match(sql, /WHEN c\.target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'/);
 assert.match(sql, /WHEN c\.provider_quota_bytes IS NULL THEN 'UNCONFIGURED'/);
 assert.match(sql, /WHEN NOT f\.forecast_sample_ready THEN 'INSUFFICIENT_SAMPLE'/);
 assert.match(sql, /THEN 'READY'/);
