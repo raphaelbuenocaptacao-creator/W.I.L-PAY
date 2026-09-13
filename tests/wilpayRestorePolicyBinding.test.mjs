@@ -77,6 +77,10 @@ function approvedBinding() {
   };
 
   binding.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(binding);
+  binding.isolation.storage_observed_identity.restore_evidence = {
+    resource_id: binding.isolation.storage_resource_id,
+    resource_fingerprint: binding.readiness.approval.resource_fingerprint
+  };
   return binding;
 }
 
@@ -121,6 +125,8 @@ const serverEnv = {
   WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS: '30',
   WILPAY_SERVER_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED: 'true',
   WILPAY_SERVER_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN: 'true',
+  WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID: 'wilpay-storage-resource',
+  WILPAY_SERVER_STORAGE_RESTORE_EVIDENCE_RESOURCE_FINGERPRINT: serverBinding.readiness.approval.resource_fingerprint,
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
@@ -141,5 +147,12 @@ const clientExposedPolicy = createWilpayServerRuntimeReadiness({
 });
 assert.equal(clientExposedPolicy.ready, false, 'restore policy attestation must remain server-only');
 assert.ok(clientExposedPolicy.reasons.includes('client_exposed_infrastructure_configuration'));
+
+const clientExposedEvidence = createWilpayServerRuntimeReadiness({
+  binding: serverBinding,
+  env: { ...serverEnv, VITE_WILPAY_STORAGE_RESTORE_EVIDENCE_RESOURCE_ID: 'wilpay-storage-resource' }
+});
+assert.equal(clientExposedEvidence.ready, false, 'restore evidence identity must remain server-only');
+assert.ok(clientExposedEvidence.reasons.includes('client_exposed_infrastructure_configuration'));
 
 console.log('W.I.L Pay restore policy binding checks: PASS');
