@@ -33,6 +33,8 @@ SELECT
   CASE
     WHEN c.target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
     WHEN c.provider_quota_bytes IS NULL THEN 'UNCONFIGURED'
+    WHEN c.verified_at IS NULL THEN 'UNVERIFIED_QUOTA'
+    WHEN c.verified_at < now() - interval '7 days' THEN 'STALE_QUOTA_VERIFICATION'
     WHEN NOT f.forecast_sample_ready THEN 'INSUFFICIENT_SAMPLE'
     WHEN c.provider_quota_bytes >= f.recommended_1000_clients_bytes_with_25pct_headroom THEN 'READY'
     ELSE 'INSUFFICIENT_QUOTA'
@@ -51,4 +53,4 @@ REVOKE ALL ON wilpay.storage_capacity_readiness FROM PUBLIC;
 COMMENT ON TABLE wilpay.storage_capacity_config IS
   'Dedicated W.I.L Pay storage capacity settings. provider_quota_bytes must stay NULL until the real exclusive provider quota is verified.';
 COMMENT ON VIEW wilpay.storage_capacity_readiness IS
-  'Fail-closed readiness check comparing verified provider quota with the metadata-only forecast for at least 1,000 complete clients.';
+  'Fail-closed readiness check comparing a provider quota verified within the last 7 days with the metadata-only forecast for at least 1,000 complete clients.';
