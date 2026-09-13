@@ -40,7 +40,10 @@ approved.isolation.storage_observed_identity = {
   root_prefix: 'wilpay/production',
   private_access_enforced: true,
   versioning_enabled: true,
-  destructive_lifecycle_disabled: true
+  destructive_lifecycle_disabled: true,
+  restore_capability_verified: true,
+  restore_drill_verified: true,
+  last_verified_restore_at: new Date().toISOString()
 };
 approved.readiness.approval.status = 'APPROVED';
 approved.readiness.approval.approved_by = 'infrastructure-owner';
