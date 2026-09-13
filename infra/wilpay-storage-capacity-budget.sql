@@ -31,6 +31,7 @@ SELECT
   f.recommended_1000_clients_bytes_with_25pct_headroom AS forecast_required_bytes,
   f.forecast_sample_ready,
   CASE
+    WHEN c.target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
     WHEN c.provider_quota_bytes IS NULL THEN 'UNCONFIGURED'
     WHEN NOT f.forecast_sample_ready THEN 'INSUFFICIENT_SAMPLE'
     WHEN c.provider_quota_bytes >= f.recommended_1000_clients_bytes_with_25pct_headroom THEN 'READY'
