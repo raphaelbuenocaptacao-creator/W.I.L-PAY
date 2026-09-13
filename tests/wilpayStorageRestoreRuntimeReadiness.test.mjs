@@ -93,6 +93,9 @@ assert.ok(blockedDrill.reasons.includes('storage_restore_drill_unverified'));
 const staleRestoreDrill = approvedBinding();
 staleRestoreDrill.isolation.storage_observed_identity.last_verified_restore_at = '2020-01-01T00:00:00.000Z';
 staleRestoreDrill.isolation.storage_observed_identity.restore_evidence.verified_at = '2020-01-01T00:00:00.000Z';
+staleRestoreDrill.isolation.storage_observed_identity.restore_evidence.evidence_ref = restoreEvidenceDigest(
+  staleRestoreDrill.isolation.storage_observed_identity.restore_evidence
+);
 const blockedStale = evaluateWilpayInfrastructureReadiness(staleRestoreDrill);
 assert.equal(blockedStale.ready, false, 'readiness must fail closed when the last restore drill exceeds the approved policy age');
 assert.ok(blockedStale.reasons.includes('storage_restore_drill_stale'));
