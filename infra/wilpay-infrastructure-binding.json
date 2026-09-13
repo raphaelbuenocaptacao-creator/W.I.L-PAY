@@ -1,5 +1,5 @@
 {
-  "schema_version": 10,
+  "schema_version": 11,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -39,7 +39,8 @@
       "policy_id": "wilpay-private-restore-v1",
       "max_restore_drill_age_days": 30,
       "restore_to_isolated_prefix_required": true,
-      "destructive_restore_overwrite_forbidden": true
+      "destructive_restore_overwrite_forbidden": true,
+      "evidence_ref_scheme": "sha256"
     },
     "storage_layout": {
       "root_prefix": "wilpay/production",
