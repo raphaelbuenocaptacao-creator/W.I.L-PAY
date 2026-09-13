@@ -58,6 +58,42 @@ function databaseIdentityStatus(isolation) {
   return matches ? 'verified' : 'mismatch';
 }
 
+function restorePolicyStatus(isolation, observed) {
+  const expected = isolation.storage_restore_policy_lock;
+  if (!expected || typeof expected !== 'object') {
+    return 'not_required';
+  }
+
+  const policy = observed?.restore_policy;
+  if (!policy || typeof policy !== 'object') {
+    return 'unverified';
+  }
+
+  const complete =
+    present(expected.policy_id) &&
+    present(policy.policy_id) &&
+    Number.isInteger(expected.max_restore_drill_age_days) &&
+    expected.max_restore_drill_age_days > 0 &&
+    Number.isInteger(policy.max_restore_drill_age_days) &&
+    policy.max_restore_drill_age_days > 0 &&
+    typeof expected.restore_to_isolated_prefix_required === 'boolean' &&
+    typeof policy.restore_to_isolated_prefix_required === 'boolean' &&
+    typeof expected.destructive_restore_overwrite_forbidden === 'boolean' &&
+    typeof policy.destructive_restore_overwrite_forbidden === 'boolean';
+
+  if (!complete) {
+    return 'unverified';
+  }
+
+  const matches =
+    policy.policy_id.trim() === expected.policy_id.trim() &&
+    policy.max_restore_drill_age_days === expected.max_restore_drill_age_days &&
+    policy.restore_to_isolated_prefix_required === expected.restore_to_isolated_prefix_required &&
+    policy.destructive_restore_overwrite_forbidden === expected.destructive_restore_overwrite_forbidden;
+
+  return matches ? 'verified' : 'mismatch';
+}
+
 function storageIdentityStatus(isolation) {
   const observed = isolation.storage_observed_identity;
   if (!observed || typeof observed !== 'object') {
@@ -115,6 +151,14 @@ function storageIdentityStatus(isolation) {
   const restoreAgeMs = Date.now() - lastRestoreAt;
   if (restoreAgeMs < 0 || restoreAgeMs > MAX_RESTORE_DRILL_AGE_MS) {
     return 'restore_drill_stale';
+  }
+
+  const restorePolicy = restorePolicyStatus(isolation, observed);
+  if (restorePolicy === 'unverified') {
+    return 'restore_policy_unverified';
+  }
+  if (restorePolicy === 'mismatch') {
+    return 'restore_policy_mismatch';
   }
 
   const matches = identityKeys.every((key) => observed[key].trim() === expected[key].trim());
@@ -185,6 +229,10 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
       reasons.push('storage_restore_drill_unverified');
     } else if (identityStatus === 'restore_drill_stale') {
       reasons.push('storage_restore_drill_stale');
+    } else if (identityStatus === 'restore_policy_unverified') {
+      reasons.push('storage_restore_policy_unverified');
+    } else if (identityStatus === 'restore_policy_mismatch') {
+      reasons.push('storage_restore_policy_mismatch');
     } else if (identityStatus === 'mismatch') {
       reasons.push('storage_identity_mismatch');
     }
@@ -271,6 +319,10 @@ const CLIENT_EXPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
   'VITE_WILPAY_STORAGE_RESTORE_CAPABILITY_VERIFIED',
   'VITE_WILPAY_STORAGE_RESTORE_DRILL_VERIFIED',
   'VITE_WILPAY_STORAGE_LAST_VERIFIED_RESTORE_AT',
+  'VITE_WILPAY_STORAGE_RESTORE_POLICY_ID',
+  'VITE_WILPAY_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS',
+  'VITE_WILPAY_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED',
+  'VITE_WILPAY_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN',
   'VITE_WILPAY_PRIVATE_STORAGE_ENDPOINT_CONFIGURED',
   'VITE_WILPAY_UPLOAD_ORIGINS_CONFIGURED'
 ]);
@@ -280,6 +332,18 @@ function parseServerBooleanFlag(env, key) {
   if (raw === 'true') return { value: true, valid: true };
   if (raw === 'false') return { value: false, valid: true };
   return { value: false, valid: false };
+}
+
+function parseServerPositiveInteger(env, key) {
+  const raw = env[key];
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw)) {
+    return { value: null, valid: false };
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    return { value: null, valid: false };
+  }
+  return { value, valid: true };
 }
 
 export function createWilpayServerRuntimeReadiness({ binding, env }) {
@@ -293,6 +357,10 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   const destructiveLifecycleFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED');
   const restoreCapabilityFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_RESTORE_CAPABILITY_VERIFIED');
   const restoreDrillFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_RESTORE_DRILL_VERIFIED');
+  const restoreIsolatedPrefixFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED');
+  const destructiveRestoreOverwriteFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN');
+  const restoreDrillAge = parseServerPositiveInteger(serverEnv, 'WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS');
+  const restorePolicyRequired = Boolean(binding?.isolation?.storage_restore_policy_lock);
 
   const base = createWilpayPrivateRuntimeReadiness({
     binding,
@@ -315,7 +383,15 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
       destructive_lifecycle_disabled: destructiveLifecycleFlag.value,
       restore_capability_verified: restoreCapabilityFlag.value,
       restore_drill_verified: restoreDrillFlag.value,
-      last_verified_restore_at: serverEnv.WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT
+      last_verified_restore_at: serverEnv.WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT,
+      restore_policy: restorePolicyRequired
+        ? {
+            policy_id: serverEnv.WILPAY_SERVER_STORAGE_RESTORE_POLICY_ID,
+            max_restore_drill_age_days: restoreDrillAge.value,
+            restore_to_isolated_prefix_required: restoreIsolatedPrefixFlag.value,
+            destructive_restore_overwrite_forbidden: destructiveRestoreOverwriteFlag.value
+          }
+        : undefined
     },
     transportStatus: {
       endpoint_configured: endpointFlag.value,
@@ -332,6 +408,15 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   if (!destructiveLifecycleFlag.valid) reasons.push('server_storage_lifecycle_flag_invalid');
   if (!restoreCapabilityFlag.valid) reasons.push('server_storage_restore_capability_flag_invalid');
   if (!restoreDrillFlag.valid) reasons.push('server_storage_restore_drill_flag_invalid');
+  if (
+    restorePolicyRequired &&
+    (!present(serverEnv.WILPAY_SERVER_STORAGE_RESTORE_POLICY_ID) ||
+      !restoreDrillAge.valid ||
+      !restoreIsolatedPrefixFlag.valid ||
+      !destructiveRestoreOverwriteFlag.valid)
+  ) {
+    reasons.push('server_storage_restore_policy_invalid');
+  }
 
   const ready = base.ready && reasons.length === 0;
   return Object.freeze({
