@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { computeWilpayResourceFingerprint } from '../scripts/wilpayResourceFingerprint.mjs';
-import { evaluateWilpayInfrastructureReadiness } from '../scripts/wilpayInfrastructureReadinessGate.mjs';
+import {
+  createWilpayServerRuntimeReadiness,
+  evaluateWilpayInfrastructureReadiness
+} from '../scripts/wilpayInfrastructureReadinessGate.mjs';
 
 function approvedBinding() {
   const binding = {
@@ -92,5 +95,51 @@ delete missing.isolation.storage_observed_identity.restore_policy;
 const missingResult = evaluateWilpayInfrastructureReadiness(missing);
 assert.equal(missingResult.ready, false, 'runtime must fail closed when restore policy evidence is missing');
 assert.ok(missingResult.reasons.includes('storage_restore_policy_unverified'));
+
+const serverBinding = approvedBinding();
+delete serverBinding.isolation.database_observed_identity;
+delete serverBinding.isolation.storage_observed_identity;
+const serverEnv = {
+  WILPAY_SERVER_NEON_PROJECT_NAME: 'wilpay-production',
+  WILPAY_SERVER_NEON_REGION_ID: 'us-east-2',
+  WILPAY_SERVER_NEON_BRANCH_NAME: 'production',
+  WILPAY_SERVER_NEON_DATABASE_NAME: 'wilpay',
+  WILPAY_SERVER_NEON_ROLE_NAME: 'wilpay_app',
+  WILPAY_SERVER_STORAGE_PROVIDER: 'private-object-storage',
+  WILPAY_SERVER_STORAGE_RESOURCE_ID: 'wilpay-storage-resource',
+  WILPAY_SERVER_STORAGE_PROVIDER_BINDING: 'wilpay-storage-binding',
+  WILPAY_SERVER_STORAGE_ENDPOINT_ORIGIN: 'https://storage.wilpay.example',
+  WILPAY_SERVER_STORAGE_BUCKET: 'wilpay-private-documents',
+  WILPAY_SERVER_STORAGE_ROOT_PREFIX: 'wilpay/production',
+  WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: 'true',
+  WILPAY_SERVER_STORAGE_VERSIONING_ENABLED: 'true',
+  WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'true',
+  WILPAY_SERVER_STORAGE_RESTORE_CAPABILITY_VERIFIED: 'true',
+  WILPAY_SERVER_STORAGE_RESTORE_DRILL_VERIFIED: 'true',
+  WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT: new Date().toISOString(),
+  WILPAY_SERVER_STORAGE_RESTORE_POLICY_ID: 'wilpay-private-restore-v1',
+  WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS: '30',
+  WILPAY_SERVER_STORAGE_RESTORE_TO_ISOLATED_PREFIX_REQUIRED: 'true',
+  WILPAY_SERVER_STORAGE_DESTRUCTIVE_RESTORE_OVERWRITE_FORBIDDEN: 'true',
+  WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
+  WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
+};
+
+const serverReady = createWilpayServerRuntimeReadiness({ binding: serverBinding, env: serverEnv });
+assert.equal(serverReady.ready, true, 'server runtime must attest the same restore policy that was approved');
+
+const serverMismatch = createWilpayServerRuntimeReadiness({
+  binding: serverBinding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_MAX_RESTORE_DRILL_AGE_DAYS: '120' }
+});
+assert.equal(serverMismatch.ready, false, 'server runtime must reject restore policy drift');
+assert.ok(serverMismatch.reasons.includes('storage_restore_policy_mismatch'));
+
+const clientExposedPolicy = createWilpayServerRuntimeReadiness({
+  binding: serverBinding,
+  env: { ...serverEnv, VITE_WILPAY_STORAGE_RESTORE_POLICY_ID: 'wilpay-private-restore-v1' }
+});
+assert.equal(clientExposedPolicy.ready, false, 'restore policy attestation must remain server-only');
+assert.ok(clientExposedPolicy.reasons.includes('client_exposed_infrastructure_configuration'));
 
 console.log('W.I.L Pay restore policy binding checks: PASS');
