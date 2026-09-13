@@ -6,7 +6,11 @@ const sql = fs.readFileSync(new URL('../infra/wilpay-storage-capacity-budget.sql
 assert.match(sql, /CREATE TABLE IF NOT EXISTS wilpay\.storage_capacity_config/);
 assert.match(sql, /target_complete_clients integer NOT NULL DEFAULT 1000/);
 assert.match(sql, /provider_quota_bytes bigint CHECK \(provider_quota_bytes IS NULL OR provider_quota_bytes > 0\)/);
-assert.match(sql, /VALUES \('primary', 1000, 25\.00, NULL, NULL\)/);
+assert.match(sql, /verification_evidence_sha256 text/);
+assert.match(sql, /verification_evidence_sha256 ~ '\^\[0-9a-f\]\{64\}\$'/);
+assert.match(sql, /ALTER TABLE wilpay\.storage_capacity_config\s+ADD COLUMN IF NOT EXISTS verification_evidence_sha256 text/);
+assert.match(sql, /WHEN c\.verification_evidence_sha256 IS NULL THEN 'UNVERIFIED_QUOTA_EVIDENCE'/);
+assert.match(sql, /VALUES \('primary', 1000, 25\.00, NULL, NULL/);
 assert.match(sql, /WHEN c\.target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'/);
 assert.match(sql, /WHEN c\.provider_quota_bytes IS NULL THEN 'UNCONFIGURED'/);
 assert.match(sql, /WHEN c\.verified_at IS NULL THEN 'UNVERIFIED_QUOTA'/);
