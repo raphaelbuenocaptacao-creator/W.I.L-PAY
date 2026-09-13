@@ -60,7 +60,10 @@ const observedStorageIdentity = {
   root_prefix: 'wilpay/production',
   private_access_enforced: true,
   versioning_enabled: true,
-  destructive_lifecycle_disabled: true
+  destructive_lifecycle_disabled: true,
+  restore_capability_verified: true,
+  restore_drill_verified: true,
+  last_verified_restore_at: new Date().toISOString()
 };
 
 const before = JSON.stringify(binding);
@@ -167,6 +170,9 @@ const serverEnv = {
   WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED: 'true',
   WILPAY_SERVER_STORAGE_VERSIONING_ENABLED: 'true',
   WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED: 'true',
+  WILPAY_SERVER_STORAGE_RESTORE_CAPABILITY_VERIFIED: 'true',
+  WILPAY_SERVER_STORAGE_RESTORE_DRILL_VERIFIED: 'true',
+  WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT: new Date().toISOString(),
   WILPAY_SERVER_PRIVATE_STORAGE_ENDPOINT_CONFIGURED: 'true',
   WILPAY_SERVER_UPLOAD_ORIGINS_CONFIGURED: 'true'
 };
@@ -254,5 +260,19 @@ const missingLifecycleEvidence = readinessModule.createWilpayServerRuntimeReadin
 });
 assert.equal(missingLifecycleEvidence.ready, false);
 assert.ok(missingLifecycleEvidence.reasons.includes('server_storage_lifecycle_flag_invalid'));
+
+const missingRestoreCapabilityEvidence = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_RESTORE_CAPABILITY_VERIFIED: undefined }
+});
+assert.equal(missingRestoreCapabilityEvidence.ready, false);
+assert.ok(missingRestoreCapabilityEvidence.reasons.includes('server_storage_restore_capability_flag_invalid'));
+
+const missingRestoreDrillEvidence = readinessModule.createWilpayServerRuntimeReadiness({
+  binding,
+  env: { ...serverEnv, WILPAY_SERVER_STORAGE_RESTORE_DRILL_VERIFIED: undefined }
+});
+assert.equal(missingRestoreDrillEvidence.ready, false);
+assert.ok(missingRestoreDrillEvidence.reasons.includes('server_storage_restore_drill_flag_invalid'));
 
 console.log('W.I.L Pay private runtime readiness tests passed');
