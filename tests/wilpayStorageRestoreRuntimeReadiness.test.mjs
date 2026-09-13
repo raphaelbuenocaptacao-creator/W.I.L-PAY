@@ -3,6 +3,13 @@ import { computeWilpayResourceFingerprint } from '../scripts/wilpayResourceFinge
 import { evaluateWilpayInfrastructureReadiness } from '../scripts/wilpayInfrastructureReadinessGate.mjs';
 
 function approvedBinding() {
+  const restorePolicy = {
+    policy_id: 'wilpay-private-restore-v1',
+    max_restore_drill_age_days: 30,
+    restore_to_isolated_prefix_required: true,
+    destructive_restore_overwrite_forbidden: true
+  };
+
   const binding = {
     project: 'wilpay',
     environment: 'production',
@@ -25,12 +32,14 @@ function approvedBinding() {
       storage_bucket: 'wilpay-private-documents',
       approved_exclusive_storage_resource_ids: ['storage-wilpay-exclusive'],
       approved_exclusive_storage_bindings: ['binding-wilpay-production'],
+      storage_restore_policy_lock: { ...restorePolicy },
       storage_layout: { root_prefix: 'wilpay/production' },
       storage_observed_identity: {
         provider: 'private-storage-provider', resource_id: 'storage-wilpay-exclusive', provider_binding: 'binding-wilpay-production',
         endpoint_origin: 'https://storage.wilpay.example', bucket: 'wilpay-private-documents', root_prefix: 'wilpay/production',
         private_access_enforced: true, versioning_enabled: true, destructive_lifecycle_disabled: true,
-        restore_capability_verified: true, restore_drill_verified: true, last_verified_restore_at: new Date().toISOString()
+        restore_capability_verified: true, restore_drill_verified: true, last_verified_restore_at: new Date().toISOString(),
+        restore_policy: { ...restorePolicy }
       }
     },
     readiness: { approval: { status: 'APPROVED', approved_by: 'infrastructure-owner', approved_at: new Date().toISOString(), evidence_ref: 'approval-record', resource_fingerprint: null } }
@@ -57,7 +66,16 @@ assert.ok(blockedDrill.reasons.includes('storage_restore_drill_unverified'));
 const staleRestoreDrill = approvedBinding();
 staleRestoreDrill.isolation.storage_observed_identity.last_verified_restore_at = '2020-01-01T00:00:00.000Z';
 const blockedStale = evaluateWilpayInfrastructureReadiness(staleRestoreDrill);
-assert.equal(blockedStale.ready, false, 'readiness must fail closed when the last restore drill is older than 30 days');
+assert.equal(blockedStale.ready, false, 'readiness must fail closed when the last restore drill exceeds the approved policy age');
 assert.ok(blockedStale.reasons.includes('storage_restore_drill_stale'));
+
+const sevenDayPolicy = approvedBinding();
+sevenDayPolicy.isolation.storage_restore_policy_lock.max_restore_drill_age_days = 7;
+sevenDayPolicy.isolation.storage_observed_identity.restore_policy.max_restore_drill_age_days = 7;
+sevenDayPolicy.isolation.storage_observed_identity.last_verified_restore_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+sevenDayPolicy.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(sevenDayPolicy);
+const blockedByApprovedAge = evaluateWilpayInfrastructureReadiness(sevenDayPolicy);
+assert.equal(blockedByApprovedAge.ready, false, 'restore drill freshness must follow the approved restore policy instead of a fixed 30-day limit');
+assert.ok(blockedByApprovedAge.reasons.includes('storage_restore_drill_stale'));
 
 console.log('W.I.L Pay storage restore runtime readiness checks: PASS');
