@@ -24,10 +24,15 @@ SELECT
     WHEN b.target_complete_clients <> o.target_complete_clients
       OR b.reserve_percent <> o.reserve_percent THEN 'CONFIG_MISMATCH'
     WHEN b.target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
+    WHEN b.capacity_status = 'UNVERIFIED_QUOTA' THEN 'BYTE_UNVERIFIED_QUOTA'
+    WHEN o.object_capacity_status = 'UNVERIFIED_QUOTA' THEN 'OBJECT_UNVERIFIED_QUOTA'
+    WHEN b.capacity_status = 'STALE_QUOTA_VERIFICATION' THEN 'BYTE_STALE_QUOTA_VERIFICATION'
+    WHEN o.object_capacity_status = 'STALE_QUOTA_VERIFICATION' THEN 'OBJECT_STALE_QUOTA_VERIFICATION'
     WHEN b.provider_quota_bytes IS NULL OR o.provider_object_quota IS NULL THEN 'UNCONFIGURED'
-    WHEN b.verified_at IS NULL OR o.verified_at IS NULL THEN 'UNCONFIGURED'
-    WHEN b.verified_at < now() - interval '30 days'
-      OR o.verified_at < now() - interval '30 days' THEN 'STALE_VERIFICATION'
+    WHEN b.verified_at IS NULL THEN 'BYTE_UNVERIFIED_QUOTA'
+    WHEN o.verified_at IS NULL THEN 'OBJECT_UNVERIFIED_QUOTA'
+    WHEN b.verified_at < now() - interval '7 days' THEN 'BYTE_STALE_QUOTA_VERIFICATION'
+    WHEN o.verified_at < now() - interval '7 days' THEN 'OBJECT_STALE_QUOTA_VERIFICATION'
     WHEN b.capacity_status = 'INSUFFICIENT_SAMPLE'
       OR o.object_capacity_status = 'INSUFFICIENT_SAMPLE' THEN 'INSUFFICIENT_SAMPLE'
     WHEN b.capacity_status = 'READY'
@@ -42,8 +47,8 @@ SELECT
     AND o.provider_object_quota IS NOT NULL
     AND b.verified_at IS NOT NULL
     AND o.verified_at IS NOT NULL
-    AND b.verified_at >= now() - interval '30 days'
-    AND o.verified_at >= now() - interval '30 days'
+    AND b.verified_at >= now() - interval '7 days'
+    AND o.verified_at >= now() - interval '7 days'
     AND b.capacity_status = 'READY'
     AND o.object_capacity_status = 'READY'
   ) AS scale_ready
@@ -53,4 +58,4 @@ CROSS JOIN wilpay.storage_object_capacity_readiness o;
 REVOKE ALL ON wilpay.storage_scale_readiness FROM PUBLIC;
 
 COMMENT ON VIEW wilpay.storage_scale_readiness IS
-  'Fail-closed W.I.L Pay private-storage scale gate. READY requires consistent configs, a target of at least 1,000 complete clients, fresh verified byte/object quotas, sufficient samples and capacity.';
+  'Fail-closed W.I.L Pay private-storage scale gate. READY requires consistent configs, a target of at least 1,000 complete clients, byte/object quotas verified within the last 7 days, sufficient samples and capacity; unverified and stale quota states are propagated explicitly.';
