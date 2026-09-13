@@ -52,6 +52,8 @@ SELECT
   CASE
     WHEN target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
     WHEN provider_object_quota IS NULL THEN 'UNCONFIGURED'
+    WHEN verified_at IS NULL THEN 'UNVERIFIED_QUOTA'
+    WHEN verified_at < now() - interval '7 days' THEN 'STALE_QUOTA_VERIFICATION'
     WHEN NOT forecast_sample_ready THEN 'INSUFFICIENT_SAMPLE'
     WHEN provider_object_quota >= required_objects_with_reserve THEN 'READY'
     ELSE 'INSUFFICIENT_OBJECT_QUOTA'
@@ -68,4 +70,4 @@ REVOKE ALL ON wilpay.storage_object_capacity_readiness FROM PUBLIC;
 COMMENT ON TABLE wilpay.storage_object_capacity_config IS
   'Dedicated W.I.L Pay private-storage object quota settings. Keep provider_object_quota NULL until the exclusive provider limit is verified.';
 COMMENT ON VIEW wilpay.storage_object_capacity_readiness IS
-  'Fail-closed object-capacity readiness for at least 1,000 complete W.I.L Pay clients using metadata-only p95 object counts and configured reserve.';
+  'Fail-closed object-capacity readiness for at least 1,000 complete W.I.L Pay clients using a provider object quota verified within the last 7 days, metadata-only p95 object counts, and configured reserve.';
