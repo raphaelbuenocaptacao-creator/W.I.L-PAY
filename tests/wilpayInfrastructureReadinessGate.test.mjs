@@ -43,7 +43,13 @@ approved.isolation.storage_observed_identity = {
   destructive_lifecycle_disabled: true,
   restore_capability_verified: true,
   restore_drill_verified: true,
-  last_verified_restore_at: new Date().toISOString()
+  last_verified_restore_at: new Date().toISOString(),
+  restore_policy: {
+    policy_id: 'wilpay-private-restore-v1',
+    max_restore_drill_age_days: 30,
+    restore_to_isolated_prefix_required: true,
+    destructive_restore_overwrite_forbidden: true
+  }
 };
 approved.readiness.approval.status = 'APPROVED';
 approved.readiness.approval.approved_by = 'infrastructure-owner';
