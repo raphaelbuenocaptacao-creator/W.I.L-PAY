@@ -43,6 +43,54 @@ function validateRestoreEvidenceReference(isolation, restorePolicy) {
   if (!/^sha256:[0-9a-f]{64}$/.test(evidenceRef)) {
     throw new Error('W.I.L Pay restore evidence reference must be an immutable sha256 digest');
   }
+
+  if (restoreEvidence.schema_version !== 1) {
+    throw new Error('W.I.L Pay restore evidence manifest must use schema version 1');
+  }
+
+  const resourceId = requireIdentity(
+    restoreEvidence.resource_id,
+    'storage_observed_identity.restore_evidence.resource_id'
+  );
+  const resourceFingerprint = requireIdentity(
+    restoreEvidence.resource_fingerprint,
+    'storage_observed_identity.restore_evidence.resource_fingerprint'
+  );
+  const verifiedAt = requireIdentity(
+    restoreEvidence.verified_at,
+    'storage_observed_identity.restore_evidence.verified_at'
+  );
+  const result = requireIdentity(
+    restoreEvidence.result,
+    'storage_observed_identity.restore_evidence.result'
+  );
+  const executionId = requireIdentity(
+    restoreEvidence.execution_id,
+    'storage_observed_identity.restore_evidence.execution_id'
+  );
+
+  if (Number.isNaN(Date.parse(verifiedAt))) {
+    throw new Error('W.I.L Pay restore evidence manifest requires a valid verified_at timestamp');
+  }
+  if (result !== 'PASS') {
+    throw new Error('W.I.L Pay restore evidence manifest requires a successful restore result');
+  }
+
+  const canonicalManifest = {
+    schema_version: 1,
+    resource_id: resourceId,
+    resource_fingerprint: resourceFingerprint,
+    verified_at: verifiedAt,
+    result,
+    execution_id: executionId
+  };
+  const expectedRef = `sha256:${createHash('sha256')
+    .update(JSON.stringify(canonicalManifest), 'utf8')
+    .digest('hex')}`;
+
+  if (evidenceRef !== expectedRef) {
+    throw new Error('W.I.L Pay restore evidence digest does not match the canonical restore manifest');
+  }
 }
 
 export function computeWilpayResourceFingerprint(binding) {
