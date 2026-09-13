@@ -7,6 +7,18 @@ function requireIdentity(value, label) {
   return value.trim();
 }
 
+function restorePolicyLock(isolation) {
+  const configured = isolation.storage_restore_policy_lock ?? {};
+  return {
+    policy_id: requireIdentity(configured.policy_id ?? 'wilpay-private-restore-v1', 'storage_restore_policy_lock.policy_id'),
+    max_restore_drill_age_days: Number.isInteger(configured.max_restore_drill_age_days)
+      ? configured.max_restore_drill_age_days
+      : 30,
+    restore_to_isolated_prefix_required: configured.restore_to_isolated_prefix_required ?? true,
+    destructive_restore_overwrite_forbidden: configured.destructive_restore_overwrite_forbidden ?? true
+  };
+}
+
 export function computeWilpayResourceFingerprint(binding) {
   if (!binding || typeof binding !== 'object') {
     throw new TypeError('W.I.L Pay fingerprint requires an infrastructure binding object');
@@ -17,7 +29,7 @@ export function computeWilpayResourceFingerprint(binding) {
   const storageLayout = isolation.storage_layout ?? {};
 
   const identity = {
-    fingerprint_version: 2,
+    fingerprint_version: 3,
     project: requireIdentity(binding.project, 'project'),
     environment: requireIdentity(binding.environment, 'environment'),
     database: {
@@ -36,7 +48,8 @@ export function computeWilpayResourceFingerprint(binding) {
       provider_binding: requireIdentity(isolation.storage_provider_binding, 'storage_provider_binding'),
       endpoint_origin: requireIdentity(isolation.storage_endpoint_origin, 'storage_endpoint_origin'),
       bucket: requireIdentity(isolation.storage_bucket, 'storage_bucket'),
-      root_prefix: requireIdentity(storageLayout.root_prefix, 'storage_layout.root_prefix')
+      root_prefix: requireIdentity(storageLayout.root_prefix, 'storage_layout.root_prefix'),
+      restore_policy: restorePolicyLock(isolation)
     }
   };
 
