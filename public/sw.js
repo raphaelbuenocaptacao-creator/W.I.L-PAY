@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wil-pay-shell-';
-const CACHE = `${CACHE_PREFIX}v38-private-vary-range-safe`;
+const CACHE = `${CACHE_PREFIX}v39-private-vary-range-safe`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   OFFLINE,
@@ -31,7 +31,7 @@ function hasPrivateVary(response) {
   const vary = (response.headers.get('vary') || '').toLowerCase();
   return vary.split(',').some(value => {
     const token = value.trim();
-    return token === '*' || token === 'cookie' || token === 'authorization' || token === 'range';
+    return token === '*' || token === 'cookie' || token === 'authorization' || token === 'range' || token === 'if-range';
   });
 }
 
@@ -69,7 +69,7 @@ self.addEventListener('activate', event => {
       try {
         await client.navigate(client.url);
       } catch {
-        try { client.postMessage({ type: 'WILPAY_UPDATE_READY', version: 'v38-private-vary-range-safe' }); } catch {}
+        try { client.postMessage({ type: 'WILPAY_UPDATE_READY', version: 'v39-private-vary-range-safe' }); } catch {}
       }
     }));
   })());
