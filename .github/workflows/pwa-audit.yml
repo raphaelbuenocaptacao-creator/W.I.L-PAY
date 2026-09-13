@@ -1,0 +1,45 @@
+name: WIL Pay PWA Audit
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pwa-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Validate PWA contract
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const manifest = JSON.parse(fs.readFileSync('public/manifest.webmanifest','utf8'));
+          for (const key of ['name','short_name','start_url','display','theme_color']) {
+            if (!manifest[key]) throw new Error(`manifest missing ${key}`);
+          }
+          const icons = manifest.icons || [];
+          for (const size of ['192x192','512x512']) {
+            if (!icons.some(i => i.sizes === size && i.type === 'image/png')) throw new Error(`missing PNG ${size}`);
+          }
+          if (!icons.some(i => (i.purpose || '').includes('maskable'))) throw new Error('missing maskable icon');
+
+          const sw = fs.readFileSync('public/sw.js','utf8');
+          const main = fs.readFileSync('src/main.jsx','utf8');
+          const index = fs.readFileSync('index.html','utf8');
+          const cache = sw.match(/CACHE_PREFIX\}([^`]+)`/)?.[1] || sw.match(/CACHE\s*=\s*`\$\{CACHE_PREFIX\}([^`]+)`/)?.[1];
+          const version = main.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/)?.[1];
+          if (!cache || !version || cache !== version) throw new Error(`SW/register version mismatch: ${cache} vs ${version}`);
+          for (const token of ['authorization','cookie','range','if-range','no-store','private','set-cookie','content-range']) {
+            if (!sw.toLowerCase().includes(token)) throw new Error(`SW missing ${token} protection`);
+          }
+          if (!sw.includes("token === 'if-range'")) throw new Error('SW must reject Vary: if-range');
+          if (!main.includes("updateViaCache: 'none'")) throw new Error('registration missing updateViaCache none');
+          if (!index.includes('manifest.webmanifest') || !index.includes('theme-color') || !index.includes('viewport')) throw new Error('index missing mobile PWA metadata');
+          NODE
