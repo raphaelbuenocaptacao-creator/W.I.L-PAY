@@ -1,5 +1,5 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "project": "wilpay",
   "environment": "production",
   "isolation": {
@@ -33,6 +33,13 @@
       "resource_identity_required": true,
       "bucket_name_immutable": true,
       "endpoint_origin_immutable": true
+    },
+    "storage_restore_policy_lock": {
+      "immutable_after_approval": true,
+      "policy_id": "wilpay-private-restore-v1",
+      "max_restore_drill_age_days": 30,
+      "restore_to_isolated_prefix_required": true,
+      "destructive_restore_overwrite_forbidden": true
     },
     "storage_layout": {
       "root_prefix": "wilpay/production",
