@@ -72,7 +72,11 @@ const observedStorageIdentity = {
   restore_capability_verified: true,
   restore_drill_verified: true,
   last_verified_restore_at: new Date().toISOString(),
-  restore_policy: { ...restorePolicy }
+  restore_policy: { ...restorePolicy },
+  restore_evidence: {
+    resource_id: 'wilpay-storage-resource',
+    resource_fingerprint: binding.readiness.approval.resource_fingerprint
+  }
 };
 
 const before = JSON.stringify(binding);
