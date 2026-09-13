@@ -56,6 +56,10 @@ approved.readiness.approval.approved_by = 'infrastructure-owner';
 approved.readiness.approval.approved_at = '2026-09-11T06:00:00.000Z';
 approved.readiness.approval.evidence_ref = 'approval-record-001';
 approved.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(approved);
+approved.isolation.storage_observed_identity.restore_evidence = {
+  resource_id: approved.isolation.storage_resource_id,
+  resource_fingerprint: approved.readiness.approval.resource_fingerprint
+};
 
 const ready = evaluateWilpayInfrastructureReadiness(approved);
 assert.equal(ready.ready, true, 'fully allowlisted, identity-matched and fingerprinted resources must pass the gate');
