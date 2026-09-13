@@ -1,7 +1,8 @@
 -- W.I.L Pay private storage scale-readiness gate.
 -- Additive and metadata-only. This view combines the verified byte and object-capacity
--- gates and fails closed when quotas are missing, samples are insufficient, configs
--- diverge, the configured target is below 1,000 complete clients, or provider verification is stale.
+-- gates and fails closed when quotas are missing, evidence is unverified, samples are
+-- insufficient, configs diverge, the configured target is below 1,000 complete clients,
+-- or provider verification is stale.
 
 CREATE OR REPLACE VIEW wilpay.storage_scale_readiness AS
 SELECT
@@ -26,6 +27,8 @@ SELECT
     WHEN b.target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
     WHEN b.capacity_status = 'UNVERIFIED_QUOTA' THEN 'BYTE_UNVERIFIED_QUOTA'
     WHEN o.object_capacity_status = 'UNVERIFIED_QUOTA' THEN 'OBJECT_UNVERIFIED_QUOTA'
+    WHEN b.capacity_status = 'UNVERIFIED_QUOTA_EVIDENCE' THEN 'BYTE_UNVERIFIED_QUOTA_EVIDENCE'
+    WHEN o.object_capacity_status = 'UNVERIFIED_QUOTA_EVIDENCE' THEN 'OBJECT_UNVERIFIED_QUOTA_EVIDENCE'
     WHEN b.capacity_status = 'STALE_QUOTA_VERIFICATION' THEN 'BYTE_STALE_QUOTA_VERIFICATION'
     WHEN o.object_capacity_status = 'STALE_QUOTA_VERIFICATION' THEN 'OBJECT_STALE_QUOTA_VERIFICATION'
     WHEN b.provider_quota_bytes IS NULL OR o.provider_object_quota IS NULL THEN 'UNCONFIGURED'
@@ -58,4 +61,4 @@ CROSS JOIN wilpay.storage_object_capacity_readiness o;
 REVOKE ALL ON wilpay.storage_scale_readiness FROM PUBLIC;
 
 COMMENT ON VIEW wilpay.storage_scale_readiness IS
-  'Fail-closed W.I.L Pay private-storage scale gate. READY requires consistent configs, a target of at least 1,000 complete clients, byte/object quotas verified within the last 7 days, sufficient samples and capacity; unverified and stale quota states are propagated explicitly.';
+  'Fail-closed W.I.L Pay private-storage scale gate. READY requires consistent configs, a target of at least 1,000 complete clients, byte/object quotas verified within the last 7 days and bound to evidence digests, sufficient samples and capacity; unverified quota, unverified evidence and stale verification states are propagated explicitly.';
