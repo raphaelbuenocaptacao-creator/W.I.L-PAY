@@ -1,6 +1,8 @@
 -- W.I.L Pay private storage object-capacity budget.
 -- Additive and metadata-only. Provider object quota remains NULL until the dedicated
 -- W.I.L Pay storage service is provisioned and its real object limit is confirmed.
+-- Quota verification stores only a SHA-256 evidence fingerprint, never provider credentials
+-- or the evidence payload itself.
 
 CREATE TABLE IF NOT EXISTS wilpay.storage_object_capacity_config (
   config_key text PRIMARY KEY CHECK (config_key = 'primary'),
@@ -8,6 +10,10 @@ CREATE TABLE IF NOT EXISTS wilpay.storage_object_capacity_config (
   reserve_percent numeric(5,2) NOT NULL DEFAULT 25.00 CHECK (reserve_percent >= 20 AND reserve_percent <= 100),
   provider_object_quota bigint CHECK (provider_object_quota IS NULL OR provider_object_quota > 0),
   verified_at timestamptz,
+  verification_evidence_sha256 text CHECK (
+    verification_evidence_sha256 IS NULL
+    OR verification_evidence_sha256 ~ '^[0-9a-f]{64}$'
+  ),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT wilpay_object_quota_verification_pair CHECK (
     (provider_object_quota IS NULL AND verified_at IS NULL)
@@ -15,10 +21,23 @@ CREATE TABLE IF NOT EXISTS wilpay.storage_object_capacity_config (
   )
 );
 
+-- Safe upgrade path for existing W.I.L Pay installations. Existing verified quotas remain
+-- readable but become fail-closed until a valid evidence fingerprint is recorded.
+ALTER TABLE wilpay.storage_object_capacity_config
+  ADD COLUMN IF NOT EXISTS verification_evidence_sha256 text CHECK (
+    verification_evidence_sha256 IS NULL
+    OR verification_evidence_sha256 ~ '^[0-9a-f]{64}$'
+  );
+
 INSERT INTO wilpay.storage_object_capacity_config (
-  config_key, target_complete_clients, reserve_percent, provider_object_quota, verified_at
+  config_key,
+  target_complete_clients,
+  reserve_percent,
+  provider_object_quota,
+  verified_at,
+  verification_evidence_sha256
 )
-VALUES ('primary', 1000, 25.00, NULL, NULL)
+VALUES ('primary', 1000, 25.00, NULL, NULL, NULL)
 ON CONFLICT (config_key) DO NOTHING;
 
 CREATE OR REPLACE VIEW wilpay.storage_object_capacity_readiness AS
@@ -29,6 +48,7 @@ WITH required AS (
     c.reserve_percent,
     c.provider_object_quota,
     c.verified_at,
+    c.verification_evidence_sha256,
     f.sampled_complete_clients,
     f.p95_objects_per_complete_client,
     f.forecast_sample_ready,
@@ -45,6 +65,7 @@ SELECT
   reserve_percent,
   provider_object_quota,
   verified_at,
+  verification_evidence_sha256,
   sampled_complete_clients,
   p95_objects_per_complete_client,
   required_objects_with_reserve,
@@ -53,6 +74,7 @@ SELECT
     WHEN target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'
     WHEN provider_object_quota IS NULL THEN 'UNCONFIGURED'
     WHEN verified_at IS NULL THEN 'UNVERIFIED_QUOTA'
+    WHEN verification_evidence_sha256 IS NULL THEN 'UNVERIFIED_QUOTA_EVIDENCE'
     WHEN verified_at < now() - interval '7 days' THEN 'STALE_QUOTA_VERIFICATION'
     WHEN NOT forecast_sample_ready THEN 'INSUFFICIENT_SAMPLE'
     WHEN provider_object_quota >= required_objects_with_reserve THEN 'READY'
@@ -68,6 +90,6 @@ REVOKE ALL ON wilpay.storage_object_capacity_config FROM PUBLIC;
 REVOKE ALL ON wilpay.storage_object_capacity_readiness FROM PUBLIC;
 
 COMMENT ON TABLE wilpay.storage_object_capacity_config IS
-  'Dedicated W.I.L Pay private-storage object quota settings. Keep provider_object_quota NULL until the exclusive provider limit is verified.';
+  'Dedicated W.I.L Pay private-storage object quota settings. Provider quota remains fail-closed until quota, verification timestamp and a SHA-256 evidence fingerprint are recorded.';
 COMMENT ON VIEW wilpay.storage_object_capacity_readiness IS
-  'Fail-closed object-capacity readiness for at least 1,000 complete W.I.L Pay clients using a provider object quota verified within the last 7 days, metadata-only p95 object counts, and configured reserve.';
+  'Fail-closed object-capacity readiness for at least 1,000 complete W.I.L Pay clients using a provider object quota verified within the last 7 days and bound to SHA-256 evidence, metadata-only p95 object counts, and configured reserve.';
