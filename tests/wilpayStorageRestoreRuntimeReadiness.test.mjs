@@ -158,6 +158,11 @@ const tamperedRestoreResult = approvedBinding();
 tamperedRestoreResult.isolation.storage_observed_identity.restore_evidence.result = 'FAIL';
 const blockedTamperedManifest = evaluateWilpayInfrastructureReadiness(tamperedRestoreResult);
 assert.equal(blockedTamperedManifest.ready, false, 'restore evidence digest must bind the canonical manifest content');
-assert.ok(blockedTamperedManifest.reasons.includes('resource_identity_incomplete'));
+assert.ok(blockedTamperedManifest.reasons.includes('storage_restore_evidence_mismatch'));
+assert.equal(
+  blockedTamperedManifest.reasons.includes('resource_identity_incomplete'),
+  false,
+  'restore evidence tampering must be rejected by readiness before resource fingerprint evaluation'
+);
 
 console.log('W.I.L Pay storage restore runtime readiness checks: PASS');
