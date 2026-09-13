@@ -1,5 +1,7 @@
 import { computeWilpayResourceFingerprint } from './wilpayResourceFingerprint.mjs';
 
+const MAX_RESTORE_DRILL_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 function present(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -93,6 +95,28 @@ function storageIdentityStatus(isolation) {
     return 'destructive_lifecycle_unverified';
   }
 
+  if (observed.restore_capability_verified !== true) {
+    return 'restore_capability_unverified';
+  }
+
+  if (observed.restore_drill_verified !== true) {
+    return 'restore_drill_unverified';
+  }
+
+  if (!present(observed.last_verified_restore_at)) {
+    return 'restore_drill_unverified';
+  }
+
+  const lastRestoreAt = Date.parse(observed.last_verified_restore_at);
+  if (Number.isNaN(lastRestoreAt)) {
+    return 'restore_drill_unverified';
+  }
+
+  const restoreAgeMs = Date.now() - lastRestoreAt;
+  if (restoreAgeMs < 0 || restoreAgeMs > MAX_RESTORE_DRILL_AGE_MS) {
+    return 'restore_drill_stale';
+  }
+
   const matches = identityKeys.every((key) => observed[key].trim() === expected[key].trim());
   return matches ? 'verified' : 'mismatch';
 }
@@ -155,6 +179,12 @@ export function evaluateWilpayInfrastructureReadiness(binding) {
       reasons.push('storage_versioning_unverified');
     } else if (identityStatus === 'destructive_lifecycle_unverified') {
       reasons.push('storage_destructive_lifecycle_unverified');
+    } else if (identityStatus === 'restore_capability_unverified') {
+      reasons.push('storage_restore_capability_unverified');
+    } else if (identityStatus === 'restore_drill_unverified') {
+      reasons.push('storage_restore_drill_unverified');
+    } else if (identityStatus === 'restore_drill_stale') {
+      reasons.push('storage_restore_drill_stale');
     } else if (identityStatus === 'mismatch') {
       reasons.push('storage_identity_mismatch');
     }
@@ -238,6 +268,9 @@ const CLIENT_EXPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
   'VITE_WILPAY_STORAGE_PRIVATE_ACCESS_ENFORCED',
   'VITE_WILPAY_STORAGE_VERSIONING_ENABLED',
   'VITE_WILPAY_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED',
+  'VITE_WILPAY_STORAGE_RESTORE_CAPABILITY_VERIFIED',
+  'VITE_WILPAY_STORAGE_RESTORE_DRILL_VERIFIED',
+  'VITE_WILPAY_STORAGE_LAST_VERIFIED_RESTORE_AT',
   'VITE_WILPAY_PRIVATE_STORAGE_ENDPOINT_CONFIGURED',
   'VITE_WILPAY_UPLOAD_ORIGINS_CONFIGURED'
 ]);
@@ -258,6 +291,8 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   const privateAccessFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_PRIVATE_ACCESS_ENFORCED');
   const versioningFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_VERSIONING_ENABLED');
   const destructiveLifecycleFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_DESTRUCTIVE_LIFECYCLE_DISABLED');
+  const restoreCapabilityFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_RESTORE_CAPABILITY_VERIFIED');
+  const restoreDrillFlag = parseServerBooleanFlag(serverEnv, 'WILPAY_SERVER_STORAGE_RESTORE_DRILL_VERIFIED');
 
   const base = createWilpayPrivateRuntimeReadiness({
     binding,
@@ -277,7 +312,10 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
       root_prefix: serverEnv.WILPAY_SERVER_STORAGE_ROOT_PREFIX,
       private_access_enforced: privateAccessFlag.value,
       versioning_enabled: versioningFlag.value,
-      destructive_lifecycle_disabled: destructiveLifecycleFlag.value
+      destructive_lifecycle_disabled: destructiveLifecycleFlag.value,
+      restore_capability_verified: restoreCapabilityFlag.value,
+      restore_drill_verified: restoreDrillFlag.value,
+      last_verified_restore_at: serverEnv.WILPAY_SERVER_STORAGE_LAST_VERIFIED_RESTORE_AT
     },
     transportStatus: {
       endpoint_configured: endpointFlag.value,
@@ -292,6 +330,8 @@ export function createWilpayServerRuntimeReadiness({ binding, env }) {
   if (!privateAccessFlag.valid) reasons.push('server_storage_private_flag_invalid');
   if (!versioningFlag.valid) reasons.push('server_storage_versioning_flag_invalid');
   if (!destructiveLifecycleFlag.valid) reasons.push('server_storage_lifecycle_flag_invalid');
+  if (!restoreCapabilityFlag.valid) reasons.push('server_storage_restore_capability_flag_invalid');
+  if (!restoreDrillFlag.valid) reasons.push('server_storage_restore_drill_flag_invalid');
 
   const ready = base.ready && reasons.length === 0;
   return Object.freeze({
