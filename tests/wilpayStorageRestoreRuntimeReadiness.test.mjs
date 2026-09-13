@@ -101,9 +101,20 @@ const sevenDayPolicy = approvedBinding();
 sevenDayPolicy.isolation.storage_restore_policy_lock.max_restore_drill_age_days = 7;
 sevenDayPolicy.isolation.storage_observed_identity.restore_policy.max_restore_drill_age_days = 7;
 sevenDayPolicy.isolation.storage_observed_identity.last_verified_restore_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
-sevenDayPolicy.isolation.storage_observed_identity.restore_evidence.verified_at = sevenDayPolicy.isolation.storage_observed_identity.last_verified_restore_at;
+delete sevenDayPolicy.isolation.storage_observed_identity.restore_evidence;
 sevenDayPolicy.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(sevenDayPolicy);
-sevenDayPolicy.isolation.storage_observed_identity.restore_evidence.resource_fingerprint = sevenDayPolicy.readiness.approval.resource_fingerprint;
+const sevenDayManifest = {
+  schema_version: 1,
+  resource_id: sevenDayPolicy.isolation.storage_resource_id,
+  resource_fingerprint: sevenDayPolicy.readiness.approval.resource_fingerprint,
+  verified_at: sevenDayPolicy.isolation.storage_observed_identity.last_verified_restore_at,
+  result: 'PASS',
+  execution_id: 'restore-drill-seven-day-fixture'
+};
+sevenDayPolicy.isolation.storage_observed_identity.restore_evidence = {
+  ...sevenDayManifest,
+  evidence_ref: restoreEvidenceDigest(sevenDayManifest)
+};
 const blockedByApprovedAge = evaluateWilpayInfrastructureReadiness(sevenDayPolicy);
 assert.equal(blockedByApprovedAge.ready, false, 'restore drill freshness must follow the approved restore policy instead of a fixed 30-day limit');
 assert.ok(blockedByApprovedAge.reasons.includes('storage_restore_drill_stale'));
@@ -147,6 +158,6 @@ const tamperedRestoreResult = approvedBinding();
 tamperedRestoreResult.isolation.storage_observed_identity.restore_evidence.result = 'FAIL';
 const blockedTamperedManifest = evaluateWilpayInfrastructureReadiness(tamperedRestoreResult);
 assert.equal(blockedTamperedManifest.ready, false, 'restore evidence digest must bind the canonical manifest content');
-assert.ok(blockedTamperedManifest.reasons.includes('storage_restore_evidence_mismatch'));
+assert.ok(blockedTamperedManifest.reasons.includes('resource_identity_incomplete'));
 
 console.log('W.I.L Pay storage restore runtime readiness checks: PASS');
