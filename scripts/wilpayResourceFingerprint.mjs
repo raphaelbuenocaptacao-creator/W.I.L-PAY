@@ -9,7 +9,7 @@ function requireIdentity(value, label) {
 
 function restorePolicyLock(isolation) {
   const configured = isolation.storage_restore_policy_lock ?? {};
-  return {
+  const policy = {
     policy_id: requireIdentity(configured.policy_id ?? 'wilpay-private-restore-v1', 'storage_restore_policy_lock.policy_id'),
     max_restore_drill_age_days: Number.isInteger(configured.max_restore_drill_age_days)
       ? configured.max_restore_drill_age_days
@@ -17,6 +17,32 @@ function restorePolicyLock(isolation) {
     restore_to_isolated_prefix_required: configured.restore_to_isolated_prefix_required ?? true,
     destructive_restore_overwrite_forbidden: configured.destructive_restore_overwrite_forbidden ?? true
   };
+
+  if (configured.evidence_ref_scheme !== undefined) {
+    const scheme = requireIdentity(configured.evidence_ref_scheme, 'storage_restore_policy_lock.evidence_ref_scheme');
+    if (scheme !== 'sha256') {
+      throw new Error('W.I.L Pay fingerprint only accepts sha256 restore evidence references');
+    }
+    policy.evidence_ref_scheme = scheme;
+  }
+
+  return policy;
+}
+
+function validateRestoreEvidenceReference(isolation, restorePolicy) {
+  if (restorePolicy.evidence_ref_scheme !== 'sha256') return;
+
+  const restoreEvidence = isolation.storage_observed_identity?.restore_evidence;
+  if (!restoreEvidence) return;
+
+  const evidenceRef = requireIdentity(
+    restoreEvidence.evidence_ref,
+    'storage_observed_identity.restore_evidence.evidence_ref'
+  );
+
+  if (!/^sha256:[0-9a-f]{64}$/.test(evidenceRef)) {
+    throw new Error('W.I.L Pay restore evidence reference must be an immutable sha256 digest');
+  }
 }
 
 export function computeWilpayResourceFingerprint(binding) {
@@ -27,6 +53,8 @@ export function computeWilpayResourceFingerprint(binding) {
   const isolation = binding.isolation ?? {};
   const databaseLock = isolation.database_identity_lock ?? {};
   const storageLayout = isolation.storage_layout ?? {};
+  const restorePolicy = restorePolicyLock(isolation);
+  validateRestoreEvidenceReference(isolation, restorePolicy);
 
   const identity = {
     fingerprint_version: 3,
@@ -49,7 +77,7 @@ export function computeWilpayResourceFingerprint(binding) {
       endpoint_origin: requireIdentity(isolation.storage_endpoint_origin, 'storage_endpoint_origin'),
       bucket: requireIdentity(isolation.storage_bucket, 'storage_bucket'),
       root_prefix: requireIdentity(storageLayout.root_prefix, 'storage_layout.root_prefix'),
-      restore_policy: restorePolicyLock(isolation)
+      restore_policy: restorePolicy
     }
   };
 
