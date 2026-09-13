@@ -11,6 +11,7 @@ assert.match(sql, /CREATE OR REPLACE VIEW wilpay\.storage_object_capacity_readin
 assert.match(sql, /CROSS JOIN wilpay\.storage_object_count_forecast f/);
 assert.match(sql, /target_complete_clients \* 5/);
 assert.match(sql, /p95_objects_per_complete_client/);
+assert.match(sql, /WHEN target_complete_clients < 1000 THEN 'TARGET_BELOW_MINIMUM'/);
 assert.match(sql, /'UNCONFIGURED'/);
 assert.match(sql, /'INSUFFICIENT_SAMPLE'/);
 assert.match(sql, /'READY'/);
