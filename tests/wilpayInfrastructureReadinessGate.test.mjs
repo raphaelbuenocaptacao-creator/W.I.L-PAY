@@ -58,7 +58,9 @@ approved.readiness.approval.evidence_ref = 'approval-record-001';
 approved.readiness.approval.resource_fingerprint = computeWilpayResourceFingerprint(approved);
 approved.isolation.storage_observed_identity.restore_evidence = {
   resource_id: approved.isolation.storage_resource_id,
-  resource_fingerprint: approved.readiness.approval.resource_fingerprint
+  resource_fingerprint: approved.readiness.approval.resource_fingerprint,
+  verified_at: approved.isolation.storage_observed_identity.last_verified_restore_at,
+  evidence_ref: 'restore-drill/audit/readiness-fixture'
 };
 
 const ready = evaluateWilpayInfrastructureReadiness(approved);
