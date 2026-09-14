@@ -40,5 +40,7 @@ jobs:
           }
           if (!sw.includes("token === 'if-range'")) throw new Error('SW must reject Vary: if-range');
           if (!main.includes("updateViaCache: 'none'")) throw new Error('registration missing updateViaCache none');
+          if (!main.includes('navigator.serviceWorker.controller')) throw new Error('controller handoff must detect whether a controller existed before registration');
+          if (!main.includes('hadController')) throw new Error('controllerchange reload must be guarded on first install');
           if (!index.includes('manifest.webmanifest') || !index.includes('theme-color') || !index.includes('viewport')) throw new Error('index missing mobile PWA metadata');
           NODE
