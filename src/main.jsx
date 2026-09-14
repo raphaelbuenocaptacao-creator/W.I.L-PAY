@@ -44,13 +44,14 @@ if ('serviceWorker' in navigator && isSecureContextForPwa) {
   window.addEventListener('load', async () => {
     try {
       let reloading = false;
+      const hadController = Boolean(navigator.serviceWorker.controller);
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloading) return;
+        if (!hadController || reloading) return;
         reloading = true;
         location.reload();
       });
       navigator.serviceWorker.addEventListener('message', event => {
-        if (event.data?.type === 'WILPAY_UPDATE_READY' && !reloading) {
+        if (event.data?.type === 'WILPAY_UPDATE_READY' && hadController && !reloading) {
           reloading = true;
           location.reload();
         }
